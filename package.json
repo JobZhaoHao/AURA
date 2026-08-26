@@ -5,7 +5,9 @@
   "engines": { "node": "22.14.x" },
   "scripts": {
     "test:node": "node --test tools/quality/tests/*.test.mjs",
-    "quality": "pnpm test:node"
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "quality": "pnpm typecheck && pnpm test:node && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "9.33.0",
