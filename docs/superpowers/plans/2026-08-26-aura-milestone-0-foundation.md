@@ -50,6 +50,7 @@ docs/runbooks/local-development.md    本地开发与验证手册
 ### Task 1: Bootstrap the Reproducible Workspace
 
 **Files:**
+
 - Create: `tools/quality/tests/workspace.test.mjs`
 - Create: `package.json`
 - Create: `pnpm-workspace.yaml`
@@ -64,6 +65,7 @@ docs/runbooks/local-development.md    本地开发与验证手册
 - Create: `packages/test-kits/package.json`
 
 **Interfaces:**
+
 - Consumes: approved design spec and repository root.
 - Produces: `pnpm quality`, strict TypeScript defaults, and workspace package names `@aura/domain`, `@aura/contracts`, `@aura/content`, `@aura/test-kits`.
 
@@ -152,6 +154,7 @@ git commit -m "build: bootstrap AURA workspace"
 ### Task 2: Establish Versioned Contracts and Pure Domain Boundaries
 
 **Files:**
+
 - Create: `packages/contracts/tsconfig.json`
 - Create: `packages/contracts/src/version.ts`
 - Create: `packages/contracts/src/health.ts`
@@ -166,6 +169,7 @@ git commit -m "build: bootstrap AURA workspace"
 - Modify: `packages/contracts/package.json`
 
 **Interfaces:**
+
 - Consumes: TypeScript project settings from Task 1.
 - Produces: `EnvironmentName`, `SchemaVersion`, `BuildInfo`, `HealthResponseSchema`, and platform-free package entry points.
 
@@ -178,21 +182,25 @@ import { HealthResponseSchema } from "../src/index.js";
 
 describe("HealthResponseSchema", () => {
   it("accepts a versioned healthy response", () => {
-    expect(HealthResponseSchema.parse({
-      schemaVersion: 1,
-      status: "ok",
-      environment: "test",
-      build: { commit: "fdaf646", builtAt: "2026-08-26T00:00:00.000Z" },
-    }).status).toBe("ok");
+    expect(
+      HealthResponseSchema.parse({
+        schemaVersion: 1,
+        status: "ok",
+        environment: "test",
+        build: { commit: "fdaf646", builtAt: "2026-08-26T00:00:00.000Z" },
+      }).status,
+    ).toBe("ok");
   });
 
   it("rejects unknown environments", () => {
-    expect(() => HealthResponseSchema.parse({
-      schemaVersion: 1,
-      status: "ok",
-      environment: "local-production",
-      build: { commit: "x", builtAt: "2026-08-26T00:00:00.000Z" },
-    })).toThrow();
+    expect(() =>
+      HealthResponseSchema.parse({
+        schemaVersion: 1,
+        status: "ok",
+        environment: "local-production",
+        build: { commit: "x", builtAt: "2026-08-26T00:00:00.000Z" },
+      }),
+    ).toThrow();
   });
 });
 ```
@@ -218,7 +226,11 @@ export type SchemaVersion = z.infer<typeof SchemaVersionSchema>;
 import { z } from "zod";
 import { SchemaVersionSchema } from "./version.js";
 
-export const EnvironmentNameSchema = z.enum(["development", "test", "production"]);
+export const EnvironmentNameSchema = z.enum([
+  "development",
+  "test",
+  "production",
+]);
 export type EnvironmentName = z.infer<typeof EnvironmentNameSchema>;
 
 export const BuildInfoSchema = z.object({
@@ -256,6 +268,7 @@ git commit -m "build: define shared package boundaries"
 ### Task 3: Add Automated Maintainability and Secret Gates
 
 **Files:**
+
 - Create: `eslint.config.mjs`
 - Create: `tools/quality/check-secrets.mjs`
 - Create: `tools/quality/tests/check-secrets.test.mjs`
@@ -264,6 +277,7 @@ git commit -m "build: define shared package boundaries"
 - Modify: `package.json`
 
 **Interfaces:**
+
 - Consumes: workspace paths and package names from Tasks 1–2.
 - Produces: `pnpm check:secrets`, `pnpm check:boundaries`, and lint rules that reject platform imports from `packages/domain`.
 
@@ -276,7 +290,10 @@ import assert from "node:assert/strict";
 import { findBoundaryViolations } from "../check-boundaries.mjs";
 
 test("domain rejects platform imports", () => {
-  const violations = findBoundaryViolations("import wx from 'wechat';", "packages/domain/src/x.ts");
+  const violations = findBoundaryViolations(
+    "import wx from 'wechat';",
+    "packages/domain/src/x.ts",
+  );
   assert.deepEqual(violations, ["wechat"]);
 });
 ```
@@ -308,23 +325,42 @@ Expected: FAIL because both checker modules are absent.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const forbidden = ["cc", "wechat", "wx-server-sdk", "@cloudbase/", "openai", "@anthropic-ai/"];
+const forbidden = [
+  "cc",
+  "wechat",
+  "wx-server-sdk",
+  "@cloudbase/",
+  "openai",
+  "@anthropic-ai/",
+];
 
 export function findBoundaryViolations(source, path) {
   if (!path.replaceAll("\\", "/").startsWith("packages/domain/")) return [];
-  const modules = [...source.matchAll(/(?:from\s+|import\s*\()\s*["']([^"']+)["']/g)].map((m) => m[1]);
-  return [...new Set(modules.filter((name) => forbidden.some((item) => name === item || name.startsWith(item))))];
+  const modules = [
+    ...source.matchAll(/(?:from\s+|import\s*\()\s*["']([^"']+)["']/g),
+  ].map((m) => m[1]);
+  return [
+    ...new Set(
+      modules.filter((name) =>
+        forbidden.some((item) => name === item || name.startsWith(item)),
+      ),
+    ),
+  ];
 }
 
 function sourceFiles(path) {
   return statSync(path).isDirectory()
     ? readdirSync(path).flatMap((name) => sourceFiles(`${path}/${name}`))
-    : /\.[cm]?tsx?$/.test(path) ? [path] : [];
+    : /\.[cm]?tsx?$/.test(path)
+      ? [path]
+      : [];
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const failures = sourceFiles(process.argv[2]).flatMap((path) =>
-    findBoundaryViolations(readFileSync(path, "utf8"), path).map((module) => `${path}: ${module}`),
+    findBoundaryViolations(readFileSync(path, "utf8"), path).map(
+      (module) => `${path}: ${module}`,
+    ),
   );
   if (failures.length) {
     console.error(failures.join("\n"));
@@ -341,23 +377,37 @@ import { pathToFileURL } from "node:url";
 
 const rules = [
   ["private-key", /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/g],
-  ["credential-assignment", /(?:SECRET|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[:=]\s*["']?([A-Za-z0-9_+\/=.-]{16,})/gi],
+  [
+    "credential-assignment",
+    /(?:SECRET|TOKEN|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[:=]\s*["']?([A-Za-z0-9_+\/=.-]{16,})/gi,
+  ],
 ];
 
 export function scanText(text, path) {
-  return rules.flatMap(([rule, pattern]) => [...text.matchAll(pattern)].map(() => ({
-    path,
-    rule,
-    sample: "[REDACTED]",
-  })));
+  return rules.flatMap(([rule, pattern]) =>
+    [...text.matchAll(pattern)].map(() => ({
+      path,
+      rule,
+      sample: "[REDACTED]",
+    })),
+  );
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard"], { encoding: "utf8" })
+  const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard"], {
+    encoding: "utf8",
+  })
     .split(/\r?\n/)
-    .filter((path) => path && /\.(?:[cm]?[jt]sx?|json|ya?ml|toml|env|md)$/i.test(path));
-  const findings = files.flatMap((path) => scanText(readFileSync(path, "utf8"), path));
-  findings.forEach(({ path, rule, sample }) => console.error(`${path}: ${rule}: ${sample}`));
+    .filter(
+      (path) =>
+        path && /\.(?:[cm]?[jt]sx?|json|ya?ml|toml|env|md)$/i.test(path),
+    );
+  const findings = files.flatMap((path) =>
+    scanText(readFileSync(path, "utf8"), path),
+  );
+  findings.forEach(({ path, rule, sample }) =>
+    console.error(`${path}: ${rule}: ${sample}`),
+  );
   if (findings.length) process.exitCode = 1;
 }
 ```
@@ -394,6 +444,7 @@ git commit -m "build: enforce maintainability and secret gates"
 ### Task 4: Implement Environment Isolation Contracts
 
 **Files:**
+
 - Create: `apps/cloud-functions/package.json`
 - Create: `apps/cloud-functions/tsconfig.json`
 - Create: `apps/cloud-functions/src/config/server-config.ts`
@@ -404,6 +455,7 @@ git commit -m "build: enforce maintainability and secret gates"
 - Create: `config/environments/production.example.json`
 
 **Interfaces:**
+
 - Consumes: `EnvironmentNameSchema` from `@aura/contracts`.
 - Produces: `loadServerConfig(source: Record<string, string | undefined>): ServerConfig` and `toPublicBuildInfo(config): BuildInfo`.
 
@@ -416,19 +468,23 @@ import { loadServerConfig } from "../src/config/server-config.js";
 
 describe("loadServerConfig", () => {
   it("rejects a production process using a development CloudBase environment", () => {
-    expect(() => loadServerConfig({
-      AURA_ENV: "production",
-      AURA_CLOUDBASE_ENV_ID: "aura-dev-001",
-      AURA_BUILD_COMMIT: "abc",
-      AURA_BUILD_TIME: "2026-08-26T00:00:00.000Z",
-    })).toThrow(/production.*dev/i);
+    expect(() =>
+      loadServerConfig({
+        AURA_ENV: "production",
+        AURA_CLOUDBASE_ENV_ID: "aura-dev-001",
+        AURA_BUILD_COMMIT: "abc",
+        AURA_BUILD_TIME: "2026-08-26T00:00:00.000Z",
+      }),
+    ).toThrow(/production.*dev/i);
   });
 
   it("requires build identity", () => {
-    expect(() => loadServerConfig({
-      AURA_ENV: "test",
-      AURA_CLOUDBASE_ENV_ID: "aura-test-001",
-    })).toThrow(/AURA_BUILD_COMMIT/);
+    expect(() =>
+      loadServerConfig({
+        AURA_ENV: "test",
+        AURA_CLOUDBASE_ENV_ID: "aura-test-001",
+      }),
+    ).toThrow(/AURA_BUILD_COMMIT/);
   });
 });
 ```
@@ -471,10 +527,14 @@ const SourceSchema = z.object({
   AURA_BUILD_TIME: z.iso.datetime(),
 });
 
-export function loadServerConfig(source: Record<string, string | undefined>): ServerConfig {
+export function loadServerConfig(
+  source: Record<string, string | undefined>,
+): ServerConfig {
   const value = SourceSchema.parse(source);
   if (!value.AURA_CLOUDBASE_ENV_ID.startsWith(prefixes[value.AURA_ENV])) {
-    throw new Error(`${value.AURA_ENV} CloudBase environment ID has the wrong prefix`);
+    throw new Error(
+      `${value.AURA_ENV} CloudBase environment ID has the wrong prefix`,
+    );
   }
   return {
     environment: value.AURA_ENV,
@@ -485,7 +545,10 @@ export function loadServerConfig(source: Record<string, string | undefined>): Se
 }
 
 export function toPublicBuildInfo(config: ServerConfig): BuildInfo {
-  return BuildInfoSchema.parse({ commit: config.buildCommit, builtAt: config.buildTime });
+  return BuildInfoSchema.parse({
+    commit: config.buildCommit,
+    builtAt: config.buildTime,
+  });
 }
 ```
 
@@ -511,6 +574,7 @@ git commit -m "build: isolate runtime environments"
 ### Task 5: Create the Cocos Client Shell Without Gameplay
 
 **Files:**
+
 - Create via Cocos Creator 4.0 LTS: `apps/game-client/assets/scenes/Bootstrap.scene`
 - Create/update via Cocos: `apps/game-client/package.json`
 - Create: `apps/game-client/assets/scripts/bootstrap/GameBootstrap.ts`
@@ -522,6 +586,7 @@ git commit -m "build: isolate runtime environments"
 - Create/update via Cocos: `apps/game-client/tsconfig.json`
 
 **Interfaces:**
+
 - Consumes: `BuildInfo` from `@aura/contracts`.
 - Produces: `PlatformBridge.getBuildInfo(): Promise<BuildInfo>` and a portrait bootstrap scene that displays a non-production diagnostic label.
 
@@ -591,7 +656,8 @@ export class GameBootstrap extends Component {
       builtAt: "1970-01-01T00:00:00.000Z",
     });
     const build = await bridge.getBuildInfo();
-    if (this.diagnosticLabel) this.diagnosticLabel.string = `AURA / development / ${build.commit}`;
+    if (this.diagnosticLabel)
+      this.diagnosticLabel.string = `AURA / development / ${build.commit}`;
   }
 }
 ```
@@ -618,11 +684,13 @@ git commit -m "build: add Cocos client shell"
 ### Task 6: Add a Contract-Tested Cloud Health Slice
 
 **Files:**
+
 - Create: `apps/cloud-functions/src/health/handler.ts`
 - Create: `apps/cloud-functions/test/health.test.ts`
 - Modify: `apps/cloud-functions/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: `loadServerConfig` from Task 4 and `HealthResponse` from `@aura/contracts`.
 - Produces: `healthHandler(): Promise<HealthResponse>`; no database, player data or external network access.
 
@@ -657,7 +725,10 @@ Expected: FAIL because `healthHandler` does not exist.
 ```ts
 // apps/cloud-functions/src/health/handler.ts
 import { HealthResponseSchema, type HealthResponse } from "@aura/contracts";
-import { loadServerConfig, toPublicBuildInfo } from "../config/server-config.js";
+import {
+  loadServerConfig,
+  toPublicBuildInfo,
+} from "../config/server-config.js";
 
 export async function healthHandler(): Promise<HealthResponse> {
   const config = loadServerConfig(process.env);
@@ -688,6 +759,7 @@ git commit -m "feat: add versioned cloud health check"
 ### Task 7: Make Quality Reproducible in CI and Document the Boundary
 
 **Files:**
+
 - Create: `.github/workflows/ci.yml`
 - Create: `docs/decisions/0001-architecture-boundaries.md`
 - Create: `docs/runbooks/local-development.md`
@@ -695,6 +767,7 @@ git commit -m "feat: add versioned cloud health check"
 - Modify: `README.md`
 
 **Interfaces:**
+
 - Consumes: `pnpm quality`, the Cocos manual check, and all package/application boundaries.
 - Produces: one CI gate, one local setup path, and an auditable Milestone 0 acceptance checklist.
 
@@ -708,7 +781,12 @@ import { readFileSync } from "node:fs";
 
 test("runbook names every required verification command", () => {
   const text = readFileSync("docs/runbooks/local-development.md", "utf8");
-  ["pnpm install --frozen-lockfile", "pnpm quality", "Cocos Creator 4.0 LTS", "WeChat Mini Game"].forEach((item) => {
+  [
+    "pnpm install --frozen-lockfile",
+    "pnpm quality",
+    "Cocos Creator 4.0 LTS",
+    "WeChat Mini Game",
+  ].forEach((item) => {
     assert.equal(text.includes(item), true, item);
   });
 });

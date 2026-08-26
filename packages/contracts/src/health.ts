@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { SchemaVersionSchema } from "./version.js";
 
-export const EnvironmentNameSchema = z.enum(["development", "test", "production"]);
+export const EnvironmentNameSchema = z.enum([
+  "development",
+  "test",
+  "production",
+]);
 export type EnvironmentName = z.infer<typeof EnvironmentNameSchema>;
 
 export const BuildInfoSchema = z.object({
