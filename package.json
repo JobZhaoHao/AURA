@@ -13,7 +13,7 @@
     "test:node": "node --test tools/quality/tests/*.test.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "quality": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm check:secrets && pnpm typecheck && pnpm test:node && pnpm test"
+    "quality": "prettier --check . && eslint . && node tools/quality/check-boundaries.mjs packages/domain/src && node tools/quality/check-secrets.mjs . && tsc -b && node --test tools/quality/tests/*.test.mjs && vitest run"
   },
   "devDependencies": {
     "@eslint/js": "9.33.0",

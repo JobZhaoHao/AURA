@@ -21,4 +21,16 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ["packages/domain/**/*.{ts,tsx,cts,mts}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ["cc", "wechat", "wx-server-sdk", "openai"],
+          patterns: ["@cloudbase/*", "@anthropic-ai/*"],
+        },
+      ],
+    },
+  },
 );

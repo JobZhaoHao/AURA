@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
 
 const forbidden = [
   "cc",
@@ -13,9 +14,38 @@ const forbidden = [
 export function findBoundaryViolations(source, path) {
   if (!path.replaceAll("\\", "/").startsWith("packages/domain/")) return [];
 
-  const modules = [
-    ...source.matchAll(/(?:\bfrom\s+|\bimport\s*(?:\(\s*)?)["']([^"']+)["']/g),
-  ].map((match) => match[1]);
+  const sourceFile = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const modules = [];
+  const addModule = (node) => {
+    if (node && ts.isStringLiteralLike(node)) modules.push(node.text);
+  };
+
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      addModule(node.moduleSpecifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      addModule(node.moduleReference.expression);
+    } else if (ts.isCallExpression(node)) {
+      const [argument] = node.arguments;
+      if (
+        node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) && node.expression.text === "require")
+      ) {
+        addModule(argument);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
 
   return [
     ...new Set(
