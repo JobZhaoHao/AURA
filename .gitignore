@@ -1,0 +1,11 @@
+.superpowers/
+build/
+temp/
+library/
+local/
+profiles/
+node_modules/
+.env
+.env.*
+!.env.example
+
