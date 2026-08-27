@@ -50,3 +50,28 @@ test("non-domain code and safe domain imports remain allowed", () => {
     [],
   );
 });
+
+test("game client rejects contract validation libraries at runtime", () => {
+  const source = [
+    'import { BuildInfoSchema } from "@aura/contracts";',
+    'import { z } from "zod";',
+  ].join("\n");
+
+  assert.deepEqual(
+    findBoundaryViolations(
+      source,
+      "apps/game-client/assets/scripts/platform/bridge.ts",
+    ),
+    ["@aura/contracts", "zod"],
+  );
+});
+
+test("game client allows contract type-only imports", () => {
+  assert.deepEqual(
+    findBoundaryViolations(
+      'import type { BuildInfo } from "@aura/contracts";',
+      "apps/game-client/assets/scripts/platform/bridge.ts",
+    ),
+    [],
+  );
+});

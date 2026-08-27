@@ -11,8 +11,32 @@ const forbidden = [
   "@anthropic-ai/",
 ];
 
+const forbiddenGameClientRuntime = ["@aura/contracts", "zod"];
+
+function matchesForbiddenModule(name, forbiddenName) {
+  return (
+    name === forbiddenName ||
+    name.startsWith(
+      forbiddenName.endsWith("/") ? forbiddenName : `${forbiddenName}/`,
+    )
+  );
+}
+
+function isTypeOnlyImport(node) {
+  const clause = node.importClause;
+  if (!clause) return false;
+  if (clause.isTypeOnly) return true;
+  if (clause.name || !ts.isNamedImports(clause.namedBindings)) return false;
+  return clause.namedBindings.elements.every((element) => element.isTypeOnly);
+}
+
 export function findBoundaryViolations(source, path) {
-  if (!path.replaceAll("\\", "/").startsWith("packages/domain/")) return [];
+  const normalizedPath = path.replaceAll("\\", "/");
+  const isDomain = normalizedPath.startsWith("packages/domain/");
+  const isGameClient = normalizedPath.startsWith(
+    "apps/game-client/assets/scripts/",
+  );
+  if (!isDomain && !isGameClient) return [];
 
   const sourceFile = ts.createSourceFile(
     path,
@@ -21,13 +45,17 @@ export function findBoundaryViolations(source, path) {
     true,
   );
   const modules = [];
-  const addModule = (node) => {
-    if (node && ts.isStringLiteralLike(node)) modules.push(node.text);
+  const addModule = (node, typeOnly = false) => {
+    if (node && ts.isStringLiteralLike(node)) {
+      modules.push({ name: node.text, typeOnly });
+    }
   };
 
   const visit = (node) => {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      addModule(node.moduleSpecifier);
+    if (ts.isImportDeclaration(node)) {
+      addModule(node.moduleSpecifier, isTypeOnlyImport(node));
+    } else if (ts.isExportDeclaration(node)) {
+      addModule(node.moduleSpecifier, node.isTypeOnly);
     } else if (
       ts.isImportEqualsDeclaration(node) &&
       ts.isExternalModuleReference(node.moduleReference)
@@ -49,9 +77,15 @@ export function findBoundaryViolations(source, path) {
 
   return [
     ...new Set(
-      modules.filter((name) =>
-        forbidden.some((item) => name === item || name.startsWith(item)),
-      ),
+      modules
+        .filter((name) =>
+          (isDomain ? forbidden : forbiddenGameClientRuntime).some(
+            (item) =>
+              (!isGameClient || !name.typeOnly) &&
+              matchesForbiddenModule(name.name, item),
+          ),
+        )
+        .map(({ name }) => name),
     ),
   ];
 }
@@ -65,11 +99,15 @@ function sourceFiles(path) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const failures = sourceFiles(process.argv[2]).flatMap((path) =>
-    findBoundaryViolations(readFileSync(path, "utf8"), path).map(
-      (module) => `${path}: ${module}`,
-    ),
-  );
+  const failures = process.argv
+    .slice(2)
+    .flatMap((root) =>
+      sourceFiles(root).flatMap((path) =>
+        findBoundaryViolations(readFileSync(path, "utf8"), path).map(
+          (module) => `${path}: ${module}`,
+        ),
+      ),
+    );
 
   if (failures.length) {
     console.error(failures.join("\n"));
