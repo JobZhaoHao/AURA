@@ -4,7 +4,7 @@
 - 状态：已由产品所有者确认（2026-08-26）
 - 项目代号：AURA（公开名称可在品牌阶段整体替换）
 - 首发平台：微信小游戏，竖屏单手操作
-- 技术路线：Cocos Creator 4.0 LTS + TypeScript + CloudBase
+- 技术路线：Cocos Creator 3.8.8 稳定版 + TypeScript + CloudBase
 
 ## 1. 产品定义
 
@@ -193,7 +193,7 @@ AURA 是一款面向塔罗新手和塔罗爱好者的混合型微信小游戏。
 
 ### 7.1 总体技术路线
 
-- Cocos Creator 4.0 LTS：竖屏场景、交互、动画、粒子、音效和微信小游戏构建。
+- Cocos Creator 3.8.8 稳定版：竖屏场景、交互、动画、粒子、音效和微信小游戏构建。
 - TypeScript：客户端、共享领域核心和 CloudBase 云函数的主要语言。
 - CloudBase：微信身份、玩家同步、文档数据库、云函数、云存储和受控外部调用。
 - 对象存储/CDN：签名资源地址、按需下载的主题和牌组资源包。
@@ -434,7 +434,7 @@ AI 可创建或修改草稿，但不能批准生产发布、发放真实资产�
 
 ### 里程碑 0：工程基础
 
-- Git 仓库、工作区、Cocos 4.0 项目和 TypeScript 严格配置。
+- Git 仓库、工作区、Cocos Creator 3.8.8 项目和 TypeScript 严格配置。
 - 共享领域包、契约包、测试工具和基础 CI。
 - 开发、测试、生产配置隔离框架。
 
@@ -470,8 +470,8 @@ AI 可创建或修改草稿，但不能批准生产发布、发放真实资产�
 
 ## 15. 参考资料
 
-- Cocos Creator 4.0 LTS：https://docs.cocos.com/creator/4.0/manual/en/
-- Cocos 微信小游戏发布：https://docs.cocos.com/creator/4.0/manual/zh/editor/publish/publish-wechatgame.html
+- Cocos Creator 3.8 手册：https://docs.cocos.com/creator/3.8/manual/zh/
+- Cocos 微信小游戏发布：https://docs.cocos.com/creator/3.8/manual/zh/editor/publish/publish-wechatgame.html
 - 腾讯 CloudBase 小游戏场景：https://cloud.tencent.com/document/product/876/20232
 - Codex 长期目标工作流：https://learn.chatgpt.com/use-cases/follow-goals
 - Codex 专项角色：https://learn.chatgpt.com/docs/agent-configuration/subagents

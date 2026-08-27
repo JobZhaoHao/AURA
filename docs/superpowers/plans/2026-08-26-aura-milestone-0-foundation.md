@@ -6,7 +6,7 @@
 
 **Architecture:** 使用 pnpm workspace 管理四个纯 TypeScript 共享包和两个首期应用壳。领域包保持平台无关；环境配置、Cocos 与 CloudBase 通过明确适配边界接入，所有检查由单一 `pnpm quality` 入口运行。
 
-**Tech Stack:** Node.js 22.14.x、pnpm 10.15.0、TypeScript 5.9.2、Vitest 3.2.4、Zod 4.1.5、ESLint 9.33.0、Prettier 3.6.2、Cocos Creator 4.0 LTS、CloudBase。
+**Tech Stack:** Node.js 22.14.x、pnpm 10.15.0、TypeScript 5.9.2、Vitest 3.2.4、Zod 4.1.5、ESLint 9.33.0、Prettier 3.6.2、Cocos Creator 3.8.8 稳定版、CloudBase。
 
 **Spec:** `docs/superpowers/specs/2026-08-26-aura-tarot-wechat-game-design.md`
 
@@ -40,7 +40,7 @@ packages/contracts/                  跨应用版本化数据契约
 packages/domain/                     纯业务核心边界
 packages/content/                    版本化内容入口
 packages/test-kits/                  固定夹具和测试辅助边界
-apps/game-client/                    Cocos 4.0 LTS 空壳及平台桥接
+apps/game-client/                    Cocos Creator 3.8.8 空壳及平台桥接
 apps/cloud-functions/                CloudBase 函数与服务端配置
 .github/workflows/ci.yml             可移植 CI 门禁
 docs/decisions/0001-architecture-boundaries.md  架构边界记录
@@ -575,7 +575,7 @@ git commit -m "build: isolate runtime environments"
 
 **Files:**
 
-- Create via Cocos Creator 4.0 LTS: `apps/game-client/assets/scenes/Bootstrap.scene`
+- Create via Cocos Creator 3.8.8: `apps/game-client/assets/scenes/Bootstrap.scene`
 - Create/update via Cocos: `apps/game-client/package.json`
 - Create: `apps/game-client/assets/scripts/bootstrap/GameBootstrap.ts`
 - Create: `apps/game-client/assets/scripts/platform/PlatformBridge.ts`
@@ -616,7 +616,7 @@ Expected: FAIL because the bridge implementation is absent.
 
 - [ ] **Step 3: Create the editor project and minimal bridge**
 
-Create the project with Cocos Creator 4.0 LTS, set design resolution to `750 × 1334`, portrait orientation, Fit Width enabled, and the bootstrap scene as the first scene. Use these platform files:
+Create the project with Cocos Creator 3.8.8, set design resolution to `750 × 1334`, portrait orientation, Fit Width enabled, and the bootstrap scene as the first scene. Use these platform files:
 
 ```ts
 // apps/game-client/assets/scripts/platform/PlatformBridge.ts
@@ -670,7 +670,7 @@ Run: `pnpm vitest run apps/game-client/test/platform-bridge.test.ts`
 
 Run: `pnpm typecheck`
 
-In Cocos Creator 4.0 LTS: open `apps/game-client`, run `Bootstrap.scene`, then build a WeChat Mini Game development package.
+In Cocos Creator 3.8.8: open `apps/game-client`, run `Bootstrap.scene`, then build a WeChat Mini Game development package.
 
 Expected: tests and typecheck pass; preview is portrait, has no console error, and shows only the diagnostics label.
 
@@ -784,7 +784,7 @@ test("runbook names every required verification command", () => {
   [
     "pnpm install --frozen-lockfile",
     "pnpm quality",
-    "Cocos Creator 4.0 LTS",
+    "Cocos Creator 3.8.8",
     "WeChat Mini Game",
   ].forEach((item) => {
     assert.equal(text.includes(item), true, item);
@@ -821,7 +821,7 @@ jobs:
       - run: pnpm quality
 ```
 
-`0001-architecture-boundaries.md` records status `Accepted`, context, the inward-only dependency decision, forbidden imports, consequences, and reversal criteria. `local-development.md` contains prerequisites, `pnpm install --frozen-lockfile`, `pnpm quality`, Cocos Creator 4.0 LTS preview, WeChat Mini Game development build, environment-file placement, and secret incident steps. README links to the approved spec, roadmap, current plan, decision record and runbook.
+`0001-architecture-boundaries.md` records status `Accepted`, context, the inward-only dependency decision, forbidden imports, consequences, and reversal criteria. `local-development.md` contains prerequisites, `pnpm install --frozen-lockfile`, `pnpm quality`, Cocos Creator 3.8.8 preview, WeChat Mini Game development build, environment-file placement, and secret incident steps. README links to the approved spec, roadmap, current plan, decision record and runbook.
 
 - [ ] **Step 4: Perform the Milestone 0 acceptance run**
 
@@ -861,7 +861,7 @@ Milestone 0 is complete only when all conditions are true:
 - `pnpm quality` exits 0.
 - Domain boundary and secret scanner negative tests prove the gates can fail.
 - Development, test and production configuration examples are distinct and contain no credentials.
-- Cocos Creator 4.0 LTS opens the project, previews the portrait bootstrap scene and builds a WeChat Mini Game development package.
+- Cocos Creator 3.8.8 opens the project, previews the portrait bootstrap scene and builds a WeChat Mini Game development package.
 - Cloud health response validates against `HealthResponseSchema` and leaks no server identifier or secret.
 - Decision record and local runbook are accurate.
 - Product owner approves the foundation from the main Codex task before Milestone 1 planning begins.

@@ -6,7 +6,7 @@
 
 **Architecture:** 采用纯 TypeScript 领域核心，Cocos Creator、微信、CloudBase、AI 供应商和运营后台均通过适配层接入。每个阶段只在上一阶段验收通过后展开自己的代码级实施计划。
 
-**Tech Stack:** Cocos Creator 4.0 LTS、TypeScript、CloudBase、微信小游戏、Web 运营后台、自动化测试与 CI。
+**Tech Stack:** Cocos Creator 3.8.8 稳定版、TypeScript、CloudBase、微信小游戏、Web 运营后台、自动化测试与 CI。
 
 **Spec:** `docs/superpowers/specs/2026-08-26-aura-tarot-wechat-game-design.md`
 

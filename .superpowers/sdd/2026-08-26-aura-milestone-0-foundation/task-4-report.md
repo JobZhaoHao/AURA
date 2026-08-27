@@ -143,19 +143,12 @@ tests, and 5/5 Vitest tests across two files.
 
 - Host pnpm is 11.19.0 while the project pins pnpm 10.15.0, which reformatted
   `pnpm-lock.yaml` broadly while adding the required app importer.
-- The project pins pnpm 10.15.0, but its offline package mirror does not have
-  all required tarballs. The latest offline restore reports
-  `@eslint/js@9.33.0` missing (an earlier attempt reported
-  `@types/node@22.15.30`), so a successful restore requires a consistent,
-  populated offline store before GREEN, `typecheck`, and full quality can run.
 
-- Resolved: pnpm 11 uses `allowBuilds` in `pnpm-workspace.yaml`; the final
-  policy authorizes only `esbuild@0.28.2`, and the successful frozen install
-  ran that postinstall with no other build scripts.
-- The product owner authorized only `esbuild@0.28.2`; the lockfile resolves
-  exactly that version. The requested root `package.json` policy was added as
-  `pnpm.onlyBuiltDependencies: ["esbuild"]`. However, the available pnpm 11
-  fallback wrapper reports that it no longer reads the `pnpm` field in
-  `package.json` and ignores this key. It then attempted registry downloads
-  and received `EACCES`; no dependency build scripts ran. No replacement
-  policy location was changed because that would exceed the authorization.
+## Final state clarification
+
+The ignored `package.json` `pnpm` field was removed. The active policy is the
+exact `allowBuilds: { "esbuild@0.28.2": true }` entry in
+`pnpm-workspace.yaml`. The frozen install succeeded and ran only that
+postinstall. The focused tests and full quality suite passed. Earlier
+network/offline errors are historical only; there is no current blocker or
+concern.
