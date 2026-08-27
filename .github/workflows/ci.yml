@@ -1,0 +1,45 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Node 22.14.0 / pnpm 10.15.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # setup-node's pnpm cache calls pnpm to locate its store, so pnpm must be
+      # available before the Node/cache step runs.
+      - name: Activate pnpm 10.15.0
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.15.0
+          run_install: false
+
+      - name: Set up Node.js 22.14.0 and pnpm cache
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the repository quality gate
+        run: pnpm quality
