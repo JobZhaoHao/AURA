@@ -1,0 +1,9 @@
+{
+  "name": "@aura/cloud-functions",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aura/contracts": "workspace:*",
+    "zod": "4.1.5"
+  }
+}
