@@ -41,6 +41,12 @@ importers:
         specifier: 4.1.5
         version: 4.1.5
 
+  apps/game-client:
+    dependencies:
+      "@aura/contracts":
+        specifier: workspace:*
+        version: link:../../packages/contracts
+
   packages/content: {}
 
   packages/contracts:

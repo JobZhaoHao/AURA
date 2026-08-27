@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "composite": true,
+    "rootDir": "assets/scripts/platform",
+    "outDir": "dist",
+    "paths": {
+      "@aura/contracts": ["packages/contracts/src/index.ts"]
+    }
+  },
+  "references": [{ "path": "../../packages/contracts" }],
+  "include": ["assets/scripts/platform"]
+}

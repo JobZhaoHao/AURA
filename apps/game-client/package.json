@@ -1,0 +1,12 @@
+{
+  "name": "@aura/game-client",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aura/contracts": "workspace:*"
+  },
+  "creator": {
+    "version": "3.8.8"
+  },
+  "uuid": "c217c05b-1072-4db2-b95e-e12419490aca"
+}
