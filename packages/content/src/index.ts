@@ -8,6 +8,8 @@ export { MAJOR_MEANINGS } from "./cards/meanings.major.js";
 export { WANDS_MEANINGS } from "./cards/meanings.wands.js";
 export { CUPS_MEANINGS } from "./cards/meanings.cups.js";
 export { SWORDS_MEANINGS } from "./cards/meanings.swords.js";
+export { PENTACLES_MEANINGS } from "./cards/meanings.pentacles.js";
+export { CARD_MEANINGS, getCardMeaningRecord } from "./cards/meanings.js";
 export type {
   CardMeaningRecord,
   CategoryMeaning,

@@ -3,9 +3,12 @@ import { CardIdSchema, type CardId } from "@aura/contracts";
 import {
   ALL_CARD_IDS,
   CARD_CATALOG,
+  CARD_MEANINGS,
   CUPS_MEANINGS,
+  getCardMeaningRecord,
   getCardMetadata,
   MAJOR_MEANINGS,
+  PENTACLES_MEANINGS,
   SWORDS_MEANINGS,
   WANDS_MEANINGS,
 } from "../src/index.js";
@@ -88,5 +91,40 @@ describe("minor arcana meanings", () => {
       ({ suit }) => suit === "swords",
     ).map(({ id }) => id);
     expectCompleteMeaningRecords(SWORDS_MEANINGS, expectedIds);
+  });
+
+  it("provides complete literal records for all 14 Pentacles cards", () => {
+    const expectedIds = CARD_CATALOG.filter(
+      ({ suit }) => suit === "pentacles",
+    ).map(({ id }) => id);
+    expectCompleteMeaningRecords(PENTACLES_MEANINGS, expectedIds);
+  });
+});
+
+describe("complete tarot meaning lookup", () => {
+  it("indexes exactly one complete meaning record for every canonical card", () => {
+    const literalRecords = [
+      ...MAJOR_MEANINGS,
+      ...WANDS_MEANINGS,
+      ...CUPS_MEANINGS,
+      ...SWORDS_MEANINGS,
+      ...PENTACLES_MEANINGS,
+    ];
+    const literalRecordIds = literalRecords.map(({ cardId }) => cardId);
+
+    expect(literalRecords).toHaveLength(78);
+    expect(literalRecordIds).toEqual(ALL_CARD_IDS);
+    expect(new Set(literalRecordIds).size).toBe(78);
+    expect(Object.keys(CARD_MEANINGS)).toEqual(ALL_CARD_IDS);
+    expectCompleteMeaningRecords(
+      ALL_CARD_IDS.map((cardId) => getCardMeaningRecord(cardId)),
+      ALL_CARD_IDS,
+    );
+  });
+
+  it("rejects an unknown runtime card id through the public lookup", () => {
+    const unknownCardId = "major.not-in-catalog" as CardId;
+
+    expect(() => getCardMeaningRecord(unknownCardId)).toThrow(RangeError);
   });
 });
