@@ -5,6 +5,7 @@ export {
 } from "./cards/catalog.js";
 export type { CardMetadata } from "./cards/catalog.js";
 export { MAJOR_MEANINGS } from "./cards/meanings.major.js";
+export { WANDS_MEANINGS } from "./cards/meanings.wands.js";
 export type {
   CardMeaningRecord,
   CategoryMeaning,

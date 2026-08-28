@@ -5,6 +5,7 @@ import {
   CARD_CATALOG,
   getCardMetadata,
   MAJOR_MEANINGS,
+  WANDS_MEANINGS,
 } from "../src/index.js";
 import { expectCompleteMeaningRecords } from "./meaning-assertions.js";
 
@@ -62,5 +63,14 @@ describe("major arcana meanings", () => {
       ({ arcana }) => arcana === "major",
     ).map(({ id }) => id);
     expectCompleteMeaningRecords(MAJOR_MEANINGS, expectedIds);
+  });
+});
+
+describe("minor arcana meanings", () => {
+  it("provides complete literal records for all 14 Wands cards", () => {
+    const expectedIds = CARD_CATALOG.filter(({ suit }) => suit === "wands").map(
+      ({ id }) => id,
+    );
+    expectCompleteMeaningRecords(WANDS_MEANINGS, expectedIds);
   });
 });
