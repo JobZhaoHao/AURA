@@ -3,6 +3,7 @@ import { CardIdSchema, type CardId } from "@aura/contracts";
 import {
   ALL_CARD_IDS,
   CARD_CATALOG,
+  CUPS_MEANINGS,
   getCardMetadata,
   MAJOR_MEANINGS,
   WANDS_MEANINGS,
@@ -72,5 +73,12 @@ describe("minor arcana meanings", () => {
       ({ id }) => id,
     );
     expectCompleteMeaningRecords(WANDS_MEANINGS, expectedIds);
+  });
+
+  it("provides complete literal records for all 14 Cups cards", () => {
+    const expectedIds = CARD_CATALOG.filter(({ suit }) => suit === "cups").map(
+      ({ id }) => id,
+    );
+    expectCompleteMeaningRecords(CUPS_MEANINGS, expectedIds);
   });
 });
