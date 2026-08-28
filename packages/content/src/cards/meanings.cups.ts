@@ -144,7 +144,7 @@ export const CUPS_MEANINGS = [
       },
     },
     reversed: {
-      keywords: ["社交失衡", "归属摩擦", "过度消遣"],
+      keywords: ["社交失衡", "社群归属张力", "过度消遣"],
       core: "群体互动可能带来消耗、排斥感或边界混乱，需要辨认哪些连接真正可靠。",
       categories: {
         general: {
