@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CardIdSchema } from "@aura/contracts";
-import { ALL_CARD_IDS, CARD_CATALOG } from "../src/index.js";
+import { CardIdSchema, type CardId } from "@aura/contracts";
+import { ALL_CARD_IDS, CARD_CATALOG, getCardMetadata } from "../src/index.js";
 
 describe("canonical tarot catalog", () => {
   it("contains exactly 78 unique stable ids", () => {
@@ -27,4 +27,25 @@ describe("canonical tarot catalog", () => {
         14,
       ),
   );
+
+  it("returns accurate metadata for major and minor cards", () => {
+    expect(getCardMetadata("major.fool" as CardId)).toEqual({
+      id: "major.fool",
+      arcana: "major",
+      nameZh: "愚人",
+    });
+    expect(getCardMetadata("minor.wands.ace" as CardId)).toEqual({
+      id: "minor.wands.ace",
+      arcana: "minor",
+      nameZh: "权杖王牌",
+      suit: "wands",
+      rank: "ace",
+    });
+  });
+
+  it("rejects a schema-valid card id that is not cataloged", () => {
+    const unknownCardId = "major.not-in-catalog" as CardId;
+
+    expect(() => getCardMetadata(unknownCardId)).toThrow(RangeError);
+  });
 });
