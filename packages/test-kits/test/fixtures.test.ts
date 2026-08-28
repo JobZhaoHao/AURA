@@ -34,9 +34,12 @@ describe("shared deterministic fixtures", () => {
   });
 
   it("can seed a valid single-card session without duplicating schemas", () => {
+    const { seed, ...sessionInput } = FIXED_READING_INPUT;
+
+    expect(seed).toBe("aura-m1-fixed-seed");
     expect(
       ReadingSessionSchema.safeParse({
-        ...FIXED_READING_INPUT,
+        ...sessionInput,
         mode: "single",
         rulesVersion: "m1-rules-v1",
         contentVersion: "m1-content-v1",

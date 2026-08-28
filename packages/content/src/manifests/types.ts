@@ -1,4 +1,5 @@
 import type {
+  AnimationManifestRef,
   CardId,
   DeckManifestRef,
   ThemeManifestRef,
@@ -37,7 +38,7 @@ export interface DeckDescriptor {
 }
 
 export interface AnimationDescriptor {
-  readonly animationId: string;
+  readonly ref: AnimationManifestRef;
   readonly kind: "shuffle" | "flip" | "background" | "transition";
   readonly durationMs: number;
   readonly fallbackPresetKey: "fade" | "none";

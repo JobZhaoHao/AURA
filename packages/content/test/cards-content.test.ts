@@ -10,6 +10,7 @@ import {
   MAJOR_MEANINGS,
   PENTACLES_MEANINGS,
   SWORDS_MEANINGS,
+  type CardMetadata,
   WANDS_MEANINGS,
 } from "../src/index.js";
 import { expectCompleteMeaningRecords } from "./meaning-assertions.js";
@@ -32,6 +33,68 @@ describe("canonical tarot catalog", () => {
     );
   });
 
+  it("assigns canonical ordinals only to major arcana", () => {
+    const majorCards = CARD_CATALOG.filter((card) => card.arcana === "major");
+    const minorCards = CARD_CATALOG.filter((card) => card.arcana === "minor");
+
+    expect(majorCards.map((card) => card.ordinal)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21,
+    ]);
+
+    for (const card of majorCards) {
+      expect(card).not.toHaveProperty("suit");
+      expect(card).not.toHaveProperty("rank");
+    }
+
+    for (const card of minorCards) {
+      expect(card).toHaveProperty("suit");
+      expect(card).toHaveProperty("rank");
+      expect(card).not.toHaveProperty("ordinal");
+    }
+  });
+
+  it("exposes arcana-discriminated metadata types", () => {
+    const acceptsMetadata = (card: CardMetadata): CardMetadata => card;
+    const validMajor = {
+      id: "major.fool" as CardId,
+      arcana: "major" as const,
+      nameZh: "愚人",
+      ordinal: 0,
+    };
+    const validMinor = {
+      id: "minor.cups.ace" as CardId,
+      arcana: "minor" as const,
+      nameZh: "圣杯王牌",
+      suit: "cups" as const,
+      rank: "ace" as const,
+    };
+    const majorWithMinorFields = {
+      ...validMajor,
+      suit: "cups" as const,
+      rank: "ace" as const,
+    };
+    const minorWithoutRank = {
+      id: "minor.cups.ace" as CardId,
+      arcana: "minor" as const,
+      nameZh: "圣杯王牌",
+      suit: "cups" as const,
+    };
+    const minorWithInvalidRank = { ...validMinor, rank: "princess" as const };
+    const minorWithOrdinal = { ...validMinor, ordinal: 0 };
+
+    acceptsMetadata(validMajor);
+    acceptsMetadata(validMinor);
+    // @ts-expect-error Major metadata cannot accept Minor suit/rank fields.
+    acceptsMetadata(majorWithMinorFields);
+    // @ts-expect-error Minor metadata requires a canonical rank.
+    acceptsMetadata(minorWithoutRank);
+    // @ts-expect-error Minor rank is restricted to the canonical rank union.
+    acceptsMetadata(minorWithInvalidRank);
+    // @ts-expect-error Minor metadata cannot accept a Major ordinal.
+    acceptsMetadata(minorWithOrdinal);
+  });
+
   it.each(["wands", "cups", "swords", "pentacles"] as const)(
     "contains 14 %s cards",
     (suit) =>
@@ -45,6 +108,7 @@ describe("canonical tarot catalog", () => {
       id: "major.fool",
       arcana: "major",
       nameZh: "愚人",
+      ordinal: 0,
     });
     expect(getCardMetadata("minor.wands.ace" as CardId)).toEqual({
       id: "minor.wands.ace",
@@ -126,5 +190,27 @@ describe("complete tarot meaning lookup", () => {
     const unknownCardId = "major.not-in-catalog" as CardId;
 
     expect(() => getCardMeaningRecord(unknownCardId)).toThrow(RangeError);
+  });
+});
+
+describe("urgent-risk safety routing", () => {
+  it.each([
+    "minor.cups.two",
+    "minor.cups.five",
+    "minor.cups.ten",
+    "minor.cups.queen",
+    "minor.cups.king",
+    "minor.wands.five",
+    "minor.wands.seven",
+    "minor.wands.nine",
+  ] as const)("routes urgent risk actionably for %s", (cardId) => {
+    const safetyNote = getCardMeaningRecord(cardId).safetyNote;
+
+    expect(safetyNote).toMatch(/牌义.*不能评估/);
+    expect(safetyNote).toMatch(/不替代|不能替代/);
+    expect(safetyNote).toContain("立即");
+    expect(safetyNote).toContain("安全");
+    expect(safetyNote).toContain("当地紧急或危机服务");
+    expect(safetyNote).toMatch(/可信赖的人|合格专业人员/);
   });
 });

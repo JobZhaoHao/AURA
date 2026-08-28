@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AnimationManifestRefSchema } from "@aura/contracts";
 import {
   ALL_CARD_IDS,
   ANIMATIONS,
@@ -112,11 +113,22 @@ describe("M1 visual descriptors", () => {
       expect(Number.isFinite(animation.durationMs)).toBe(true);
       expect(["fade", "none"]).toContain(animation.fallbackPresetKey);
       expect(Object.keys(animation).sort()).toEqual([
-        "animationId",
         "durationMs",
         "fallbackPresetKey",
         "kind",
+        "ref",
       ]);
     }
+  });
+
+  it("publishes unique versioned animation references", () => {
+    const refs = ANIMATIONS.map((animation) =>
+      AnimationManifestRefSchema.parse(animation.ref),
+    );
+    const identityPairs = refs.map(
+      ({ animationId, version }) => `${animationId}@${version}`,
+    );
+
+    expect(new Set(identityPairs).size).toBe(identityPairs.length);
   });
 });

@@ -1,4 +1,4 @@
-import type { Arcana, CardId, Suit } from "@aura/contracts";
+import type { CardId, Suit } from "@aura/contracts";
 
 const MAJORS = [
   ["fool", "愚人"],
@@ -49,23 +49,40 @@ const RANKS = [
   ["king", "国王"],
 ] as const;
 
-export interface CardMetadata {
+interface MajorCardMetadata {
   readonly id: CardId;
-  readonly arcana: Arcana;
+  readonly arcana: "major";
   readonly nameZh: string;
-  readonly suit?: Suit;
-  readonly rank?: string;
+  readonly ordinal: number;
+  readonly suit?: never;
+  readonly rank?: never;
 }
+
+type MinorRank = (typeof RANKS)[number][0];
+
+interface MinorCardMetadata {
+  readonly id: CardId;
+  readonly arcana: "minor";
+  readonly nameZh: string;
+  readonly suit: Suit;
+  readonly rank: MinorRank;
+  readonly ordinal?: never;
+}
+
+export type CardMetadata = MajorCardMetadata | MinorCardMetadata;
 
 const toCardId = (value: string): CardId => value as CardId;
 
-const majorCards: CardMetadata[] = MAJORS.map(([slug, nameZh]) => ({
-  id: toCardId(`major.${slug}`),
-  arcana: "major",
-  nameZh,
-}));
+const majorCards: MajorCardMetadata[] = MAJORS.map(
+  ([slug, nameZh], ordinal) => ({
+    id: toCardId(`major.${slug}`),
+    arcana: "major",
+    nameZh,
+    ordinal,
+  }),
+);
 
-const minorCards: CardMetadata[] = SUITS.flatMap(([suit, suitZh]) =>
+const minorCards: MinorCardMetadata[] = SUITS.flatMap(([suit, suitZh]) =>
   RANKS.map(([rank, rankZh]) => ({
     id: toCardId(`minor.${suit}.${rank}`),
     arcana: "minor" as const,
