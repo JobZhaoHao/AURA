@@ -10,6 +10,9 @@ export default defineConfig({
       "@aura/content": fileURLToPath(
         new URL("./packages/content/src/index.ts", import.meta.url),
       ),
+      "@aura/test-kits": fileURLToPath(
+        new URL("./packages/test-kits/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {
