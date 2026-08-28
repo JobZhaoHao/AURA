@@ -15,3 +15,6 @@ export type {
   CategoryMeaning,
   OrientedMeaning,
 } from "./cards/meanings.js";
+export { SPREAD_DEFINITIONS } from "./spreads.js";
+export type { SpreadDefinition } from "./spreads.js";
+export { CONTENT_VERSION, RULES_VERSION, TEXT_VERSION } from "./versions.js";
