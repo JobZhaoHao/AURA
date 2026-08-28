@@ -7,9 +7,7 @@ export function expectCompleteMeaningRecords(
   expectedIds: readonly CardId[],
 ): void {
   expect(records).toHaveLength(expectedIds.length);
-  expect(records.map(({ cardId }) => cardId).sort()).toEqual(
-    [...expectedIds].sort(),
-  );
+  expect(records.map(({ cardId }) => cardId)).toEqual(expectedIds);
   expect(new Set(records.map(({ cardId }) => cardId)).size).toBe(
     records.length,
   );
