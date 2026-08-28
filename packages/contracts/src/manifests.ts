@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-export const ManifestVersionSchema = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9._-]*$/);
+export const ManifestVersionSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]*$/);
 export type ManifestVersion = z.infer<typeof ManifestVersionSchema>;
 
 const StableIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
