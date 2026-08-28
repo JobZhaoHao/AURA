@@ -6,6 +6,7 @@ import {
   CUPS_MEANINGS,
   getCardMetadata,
   MAJOR_MEANINGS,
+  SWORDS_MEANINGS,
   WANDS_MEANINGS,
 } from "../src/index.js";
 import { expectCompleteMeaningRecords } from "./meaning-assertions.js";
@@ -80,5 +81,12 @@ describe("minor arcana meanings", () => {
       ({ id }) => id,
     );
     expectCompleteMeaningRecords(CUPS_MEANINGS, expectedIds);
+  });
+
+  it("provides complete literal records for all 14 Swords cards", () => {
+    const expectedIds = CARD_CATALOG.filter(
+      ({ suit }) => suit === "swords",
+    ).map(({ id }) => id);
+    expectCompleteMeaningRecords(SWORDS_MEANINGS, expectedIds);
   });
 });
