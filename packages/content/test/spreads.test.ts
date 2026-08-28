@@ -7,14 +7,15 @@ import {
 } from "../src/index.js";
 
 describe("M1 content constants", () => {
-  it("freezes the approved spread positions", () => {
-    expect(SPREAD_DEFINITIONS.single.positions).toEqual(["single"]);
-    expect(SPREAD_DEFINITIONS.daily.positions).toEqual(["daily"]);
-    expect(SPREAD_DEFINITIONS["past-present-trend"].positions).toEqual([
-      "past",
-      "present",
-      "trend",
-    ]);
+  it("exports exactly the approved fixed spread definitions", () => {
+    expect(SPREAD_DEFINITIONS).toEqual({
+      single: { key: "single", positions: ["single"] },
+      daily: { key: "daily", positions: ["daily"] },
+      "past-present-trend": {
+        key: "past-present-trend",
+        positions: ["past", "present", "trend"],
+      },
+    });
   });
 
   it("publishes non-empty independent replay versions", () => {

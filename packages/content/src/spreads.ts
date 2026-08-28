@@ -12,4 +12,4 @@ export const SPREAD_DEFINITIONS = {
     key: "past-present-trend",
     positions: ["past", "present", "trend"],
   },
-} as const satisfies Record<string, SpreadDefinition>;
+} as const satisfies Record<SpreadDefinition["key"], SpreadDefinition>;
