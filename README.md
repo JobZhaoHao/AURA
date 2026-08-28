@@ -15,6 +15,9 @@ pnpm quality
 
 - [批准的产品与系统设计规格](docs/superpowers/specs/2026-08-26-aura-tarot-wechat-game-design.md)
 - [Milestone 1 核心玩法纵切设计](docs/superpowers/specs/2026-08-28-aura-milestone-1-core-gameplay-design.md)
+- [Milestone 1 分阶段实施总计划](docs/superpowers/plans/2026-08-28-aura-milestone-1-core-gameplay.md)
+- [长期视觉合同](DESIGN.md)
+- [跨屏交互合同](UX-CONTRACT.md)
 - [分阶段交付路线图](docs/superpowers/plans/2026-08-26-aura-delivery-roadmap.md)
 - [当前 Milestone 0 实施计划](docs/superpowers/plans/2026-08-26-aura-milestone-0-foundation.md)
 - [ADR 0001：架构边界](docs/decisions/0001-architecture-boundaries.md)
