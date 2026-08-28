@@ -26,3 +26,33 @@ export type {
 } from "./cards.js";
 export { SafetyDispositionSchema } from "./safety.js";
 export type { SafetyDisposition } from "./safety.js";
+export {
+  AnimationManifestRefSchema,
+  DeckManifestRefSchema,
+  ManifestVersionSchema,
+  ThemeManifestRefSchema,
+} from "./manifests.js";
+export type {
+  AnimationManifestRef,
+  DeckManifestRef,
+  ManifestVersion,
+  ThemeManifestRef,
+} from "./manifests.js";
+export {
+  DailyReadingCacheEntrySchema,
+  DiscoveryRecordSchema,
+  LocalHistoryEntrySchema,
+  ReadingDrawSchema,
+  ReadingNarrativeSchema,
+  ReadingResultSchema,
+  ReadingSessionSchema,
+} from "./readings.js";
+export type {
+  DailyReadingCacheEntry,
+  DiscoveryRecord,
+  LocalHistoryEntry,
+  ReadingDraw,
+  ReadingNarrative,
+  ReadingResult,
+  ReadingSession,
+} from "./readings.js";
