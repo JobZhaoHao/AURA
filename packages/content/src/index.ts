@@ -4,3 +4,9 @@ export {
   getCardMetadata,
 } from "./cards/catalog.js";
 export type { CardMetadata } from "./cards/catalog.js";
+export { MAJOR_MEANINGS } from "./cards/meanings.major.js";
+export type {
+  CardMeaningRecord,
+  CategoryMeaning,
+  OrientedMeaning,
+} from "./cards/meanings.js";

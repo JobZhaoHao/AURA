@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { CardIdSchema, type CardId } from "@aura/contracts";
-import { ALL_CARD_IDS, CARD_CATALOG, getCardMetadata } from "../src/index.js";
+import {
+  ALL_CARD_IDS,
+  CARD_CATALOG,
+  getCardMetadata,
+  MAJOR_MEANINGS,
+} from "../src/index.js";
+import { expectCompleteMeaningRecords } from "./meaning-assertions.js";
 
 describe("canonical tarot catalog", () => {
   it("contains exactly 78 unique stable ids", () => {
@@ -47,5 +53,14 @@ describe("canonical tarot catalog", () => {
     const unknownCardId = "major.not-in-catalog" as CardId;
 
     expect(() => getCardMetadata(unknownCardId)).toThrow(RangeError);
+  });
+});
+
+describe("major arcana meanings", () => {
+  it("provides complete literal records for all 22 major arcana", () => {
+    const expectedIds = CARD_CATALOG.filter(
+      ({ arcana }) => arcana === "major",
+    ).map(({ id }) => id);
+    expectCompleteMeaningRecords(MAJOR_MEANINGS, expectedIds);
   });
 });
