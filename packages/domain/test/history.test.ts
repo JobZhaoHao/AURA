@@ -672,27 +672,23 @@ describe("appendLocalHistoryEntry", () => {
     },
   );
 
-  it("rejects observable own-key and indexed-descriptor disagreement", () => {
-    const hiddenSession = "PRIVATE_OMITTED_OWN_KEY_SESSION";
-    const history = new Proxy(
-      [saved(), saved(reading({ sessionId: hiddenSession }))],
-      {
-        ownKeys(target) {
-          return Reflect.ownKeys(target).filter((key) => key !== "1");
-        },
+  it("never enumerates unbounded non-index history keys", () => {
+    const ownKeysSentinel = "PRIVATE_HISTORY_OWN_KEYS";
+    const first = saved();
+    const incoming = saved(reading({ sessionId: "history-session-003" }));
+    let ownKeysCalls = 0;
+    const history = new Proxy([first], {
+      ownKeys() {
+        ownKeysCalls += 1;
+        throw new Error(ownKeysSentinel);
       },
-    );
+    });
 
-    expectHistoryError(
-      () =>
-        appendLocalHistoryEntry(
-          history,
-          saved(reading({ sessionId: "history-session-003" })),
-        ),
-      "INVALID_HISTORY_ENTRY",
-      "history",
-      [hiddenSession],
-    );
+    expect(appendLocalHistoryEntry(history, incoming)).toEqual([
+      first,
+      incoming,
+    ]);
+    expect(ownKeysCalls).toBe(0);
   });
 
   it("snapshots a stateful incoming saved time before schema validation", () => {

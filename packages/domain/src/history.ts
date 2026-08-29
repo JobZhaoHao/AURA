@@ -226,31 +226,16 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
     throw new Error("Invalid history length.");
   }
 
-  const ownKeys = Reflect.ownKeys(value);
-  const indexKeys = ownKeys.filter(isArrayIndexKey);
-  if (indexKeys.length !== initialLength) {
-    throw new Error("Invalid history index shape.");
-  }
-
-  const initialDescriptors: Array<PropertyDescriptor | undefined> = Array.from({
-    length: initialLength,
-  });
-  for (const key of indexKeys) {
-    const index = Number(key);
-    if (index >= initialLength) {
-      throw new Error("Invalid history index.");
+  const initialDescriptors: PropertyDescriptor[] = [];
+  for (let index = 0; index < initialLength; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined) {
+      throw new Error("Sparse history collection.");
     }
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor === undefined || initialDescriptors[index] !== undefined) {
-      throw new Error("Invalid history index descriptor.");
-    }
-    initialDescriptors[index] = descriptor;
+    initialDescriptors.push(descriptor);
   }
-  if (
-    initialDescriptors.some((descriptor) => descriptor === undefined) ||
-    !hasStableArrayLength(value, lengthDescriptor, initialLength)
-  ) {
-    throw new Error("Sparse or unstable history collection.");
+  if (!hasStableArrayLength(value, lengthDescriptor, initialLength)) {
+    throw new Error("Unstable history collection.");
   }
 
   const snapshot: unknown[] = [];
@@ -293,17 +278,6 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
   }
 
   return snapshot;
-}
-
-function isArrayIndexKey(key: PropertyKey): key is string {
-  if (typeof key !== "string") return false;
-  const index = Number(key);
-  return (
-    Number.isInteger(index) &&
-    index >= 0 &&
-    index < 4_294_967_295 &&
-    String(index) === key
-  );
 }
 
 function hasStableArrayLength(
