@@ -25,7 +25,15 @@ const MANAGED_ARRAY_PROTOTYPE = Array.prototype;
 const MANAGED_ITERATOR_PROPERTY = Symbol.iterator;
 const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const defineProperty = Object.defineProperty;
-const deleteProperty = Reflect.deleteProperty;
+const CapturedSet = Set;
+const capturedSetHas = Set.prototype.has.call.bind(Set.prototype.has) as (
+  target: Set<string>,
+  value: string,
+) => boolean;
+const capturedSetAdd = Set.prototype.add.call.bind(Set.prototype.add) as (
+  target: Set<string>,
+  value: string,
+) => Set<string>;
 
 interface ArrayIntrinsicSnapshot {
   readonly iteratorDescriptor: PropertyDescriptor | undefined;
@@ -198,14 +206,14 @@ export function appendLocalHistoryEntry(
   }
 
   try {
-    const sessionIds = new Set<string>();
+    const sessionIds = new CapturedSet<string>();
     const parsedHistoryLength = parsedHistory.length;
     for (let index = 0; index < parsedHistoryLength; index += 1) {
       const persistedEntry = parsedHistory[index]!;
-      if (sessionIds.has(persistedEntry.session.sessionId)) {
+      if (capturedSetHas(sessionIds, persistedEntry.session.sessionId)) {
         throw new Error("Duplicate persisted session ID.");
       }
-      sessionIds.add(persistedEntry.session.sessionId);
+      capturedSetAdd(sessionIds, persistedEntry.session.sessionId);
     }
   } catch {
     throw new DomainError("INVALID_HISTORY_ENTRY", "history");
@@ -221,6 +229,9 @@ export function appendLocalHistoryEntry(
     }
   }
   if (existing === undefined) {
+    if (parsedHistoryLength >= MAX_LOCAL_HISTORY_ENTRIES) {
+      throw new DomainError("INVALID_HISTORY_ENTRY", "history");
+    }
     return copyHistoryWithEntry(parsedHistory, parsedEntry);
   }
   if (sameReadingResult(existing, parsedEntry)) {
@@ -269,7 +280,7 @@ function restoreProperty(
   if (samePropertyDescriptor(currentDescriptor, initialDescriptor)) return;
 
   if (initialDescriptor === undefined) {
-    if (!deleteProperty(target, property)) {
+    if (!delete (target as Record<PropertyKey, unknown>)[property]) {
       throw new Error("Unable to restore intrinsic property.");
     }
     return;

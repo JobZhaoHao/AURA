@@ -1,10 +1,13 @@
 import type {
+  CardId,
   DeckManifestRef,
+  DiscoveryRecord,
   LocalHistoryEntry,
   ThemeManifestRef,
 } from "@aura/contracts";
 import { describe, expect, it } from "vitest";
 import { DomainError } from "../src/errors.js";
+import { recordCardDiscovery } from "../src/discovery.js";
 import {
   appendLocalHistoryEntry,
   createLocalHistoryEntry,
@@ -57,6 +60,17 @@ function saved(
   refs = { themeRef: THEME_REF, deckRef: DECK_REF },
 ): LocalHistoryEntry {
   return createLocalHistoryEntry(result, savedAt, refs);
+}
+
+function historyWithUniqueSessions(length: number): LocalHistoryEntry[] {
+  const template = saved();
+  return Array.from({ length }, (_unused, index) => ({
+    ...template,
+    session: {
+      ...template.session,
+      sessionId: `history-cap-${index.toString().padStart(5, "0")}`,
+    },
+  }));
 }
 
 function expectHistoryError(
@@ -363,6 +377,108 @@ describe("appendLocalHistoryEntry", () => {
       "INVALID_HISTORY_ENTRY",
       "history",
       [SESSION_ID],
+    );
+  });
+
+  it("does not let a getter-rebound global Set hide duplicate sessions", () => {
+    const originalSetDescriptor = Object.getOwnPropertyDescriptor(
+      global,
+      "Set",
+    )!;
+    const OriginalSet = global.Set;
+    class DuplicateHidingSet<T> extends OriginalSet<T> {
+      override has(value: T): boolean {
+        if (typeof value === "string" && value.startsWith("history-session-")) {
+          return false;
+        }
+        return super.has(value);
+      }
+    }
+    const first = saved();
+    const rebound = {
+      ...first,
+      get savedAt(): string {
+        Object.defineProperty(global, "Set", {
+          ...originalSetDescriptor,
+          value: DuplicateHidingSet,
+        });
+        return SAVED_AT;
+      },
+    } as LocalHistoryEntry;
+    const duplicate = saved(reading(), "2026-08-30T00:00:00.000Z");
+    let thrown: unknown;
+    try {
+      try {
+        appendLocalHistoryEntry(
+          [rebound, duplicate],
+          saved(reading({ sessionId: "history-session-003" })),
+        );
+      } catch (error) {
+        thrown = error;
+      }
+    } finally {
+      Object.defineProperty(global, "Set", originalSetDescriptor);
+    }
+
+    expectHistoryError(
+      () => {
+        if (thrown !== undefined) throw thrown;
+      },
+      "INVALID_HISTORY_ENTRY",
+      "history",
+      [SESSION_ID],
+    );
+  });
+
+  it("allows 9,999 entries to grow to the 10,000 output ceiling", () => {
+    const history = historyWithUniqueSessions(9_999);
+    const incoming = saved(reading({ sessionId: "history-cap-final" }));
+
+    const appended = appendLocalHistoryEntry(history, incoming);
+
+    expect(appended).toHaveLength(10_000);
+    expect(appended[9_999]).toEqual(incoming);
+  });
+
+  it("rejects a genuinely new entry when history is already at 10,000", () => {
+    const history = historyWithUniqueSessions(10_000);
+
+    expectHistoryError(
+      () =>
+        appendLocalHistoryEntry(
+          history,
+          saved(reading({ sessionId: "history-cap-new-00000" })),
+        ),
+      "INVALID_HISTORY_ENTRY",
+      "history",
+    );
+  });
+
+  it("keeps identical replay idempotent at the 10,000 ceiling", () => {
+    const history = historyWithUniqueSessions(10_000);
+    const existing = history[9_999]!;
+
+    const replayed = appendLocalHistoryEntry(history, existing);
+
+    expect(replayed).toHaveLength(10_000);
+    expect(replayed).toEqual(history);
+  });
+
+  it("keeps same-session conflict behavior at the 10,000 ceiling", () => {
+    const history = historyWithUniqueSessions(10_000);
+    const existing = history[9_999]!;
+    const conflicting = saved(
+      reading({
+        sessionId: existing.session.sessionId,
+        questionCategory: "relationships",
+      }),
+    );
+
+    expectHistoryError(
+      () => appendLocalHistoryEntry(history, conflicting),
+      "HISTORY_SESSION_CONFLICT",
+      "sessionId",
+      [existing.session.sessionId],
     );
   });
 
@@ -950,5 +1066,56 @@ describe("appendLocalHistoryEntry", () => {
       "themeRef",
       [invalidThemeId, resultSentinel],
     );
+  });
+});
+
+describe("recordCardDiscovery intrinsic safety", () => {
+  it("does not let a getter-rebound global Set hide invalid discovery state", () => {
+    const originalSetDescriptor = Object.getOwnPropertyDescriptor(
+      global,
+      "Set",
+    )!;
+    const OriginalSet = global.Set;
+    class DiscoveryBypassingSet<T> extends OriginalSet<T> {
+      override has(value: T): boolean {
+        if (typeof value === "string" && value.startsWith("major.")) {
+          return this.size > 10;
+        }
+        return super.has(value);
+      }
+    }
+    const cardId = "major.fool" as CardId;
+    const rebound = {
+      get cardId(): CardId {
+        Object.defineProperty(global, "Set", {
+          ...originalSetDescriptor,
+          value: DiscoveryBypassingSet,
+        });
+        return cardId;
+      },
+      firstSeenAt: CREATED_AT,
+    } as DiscoveryRecord;
+    const duplicate = {
+      cardId,
+      firstSeenAt: "2026-08-30T00:00:00.000Z",
+    } as DiscoveryRecord;
+    let thrown: unknown;
+    try {
+      try {
+        recordCardDiscovery(
+          [rebound, duplicate],
+          "major.magician" as CardId,
+          SAVED_AT,
+        );
+      } catch (error) {
+        thrown = error;
+      }
+    } finally {
+      Object.defineProperty(global, "Set", originalSetDescriptor);
+    }
+
+    expectSafeDomainError(thrown, "INVALID_DISCOVERY_STATE", "discovery", [
+      cardId,
+    ]);
   });
 });

@@ -5,6 +5,7 @@ import {
   CARD_CATALOG,
   CARD_MEANINGS,
   CUPS_MEANINGS,
+  CURRENT_READING_CONTENT_BUNDLE,
   getCardMeaningRecord,
   getCardMetadata,
   MAJOR_MEANINGS,
@@ -190,6 +191,99 @@ describe("complete tarot meaning lookup", () => {
     const unknownCardId = "major.not-in-catalog" as CardId;
 
     expect(() => getCardMeaningRecord(unknownCardId)).toThrow(RangeError);
+  });
+
+  it("deep-freezes catalog and meaning records in the trusted bundle", () => {
+    const bundledCard = CURRENT_READING_CONTENT_BUNDLE.cardCatalog[0]!;
+    const bundledMeaning =
+      CURRENT_READING_CONTENT_BUNDLE.cardMeanings[bundledCard.id]!;
+    const originalCardDescriptor = Object.getOwnPropertyDescriptor(
+      bundledCard,
+      "nameZh",
+    )!;
+    const originalAdviceDescriptor = Object.getOwnPropertyDescriptor(
+      bundledMeaning.upright.categories.general,
+      "advice",
+    )!;
+
+    try {
+      expect(() => {
+        (bundledCard as unknown as { nameZh: string }).nameZh =
+          "PRIVATE_MUTATED_CARD_NAME";
+      }).toThrow(TypeError);
+      expect(() => {
+        (
+          bundledMeaning.upright.categories.general as unknown as {
+            advice: string;
+          }
+        ).advice = "PRIVATE_MUTATED_MEANING";
+      }).toThrow(TypeError);
+    } finally {
+      Reflect.defineProperty(bundledCard, "nameZh", originalCardDescriptor);
+      Reflect.defineProperty(
+        bundledMeaning.upright.categories.general,
+        "advice",
+        originalAdviceDescriptor,
+      );
+    }
+
+    expect(Object.isFrozen(CURRENT_READING_CONTENT_BUNDLE.cardCatalog)).toBe(
+      true,
+    );
+    expect(Object.isFrozen(bundledCard)).toBe(true);
+    expect(Object.isFrozen(CURRENT_READING_CONTENT_BUNDLE.cardMeanings)).toBe(
+      true,
+    );
+    expect(Object.isFrozen(bundledMeaning)).toBe(true);
+    expect(Object.isFrozen(bundledMeaning.upright)).toBe(true);
+    expect(Object.isFrozen(bundledMeaning.upright.keywords)).toBe(true);
+    expect(Object.isFrozen(bundledMeaning.upright.categories)).toBe(true);
+    expect(Object.isFrozen(bundledMeaning.upright.categories.general)).toBe(
+      true,
+    );
+  });
+
+  it("defensively copies mutable catalog and meaning exports", () => {
+    const sourceCard = CARD_CATALOG[0]!;
+    const bundledCard = CURRENT_READING_CONTENT_BUNDLE.cardCatalog[0]!;
+    const sourceMeaning = CARD_MEANINGS[sourceCard.id]!;
+    const bundledMeaning =
+      CURRENT_READING_CONTENT_BUNDLE.cardMeanings[sourceCard.id]!;
+    const originalCardDescriptor = Object.getOwnPropertyDescriptor(
+      sourceCard,
+      "nameZh",
+    )!;
+    const originalAdviceDescriptor = Object.getOwnPropertyDescriptor(
+      sourceMeaning.upright.categories.general,
+      "advice",
+    )!;
+
+    try {
+      Object.defineProperty(sourceCard, "nameZh", {
+        ...originalCardDescriptor,
+        value: "PRIVATE_SOURCE_CARD_NAME",
+      });
+      Object.defineProperty(
+        sourceMeaning.upright.categories.general,
+        "advice",
+        {
+          ...originalAdviceDescriptor,
+          value: "PRIVATE_SOURCE_MEANING",
+        },
+      );
+
+      expect(bundledCard.nameZh).toBe(originalCardDescriptor.value);
+      expect(bundledMeaning.upright.categories.general.advice).toBe(
+        originalAdviceDescriptor.value,
+      );
+    } finally {
+      Object.defineProperty(sourceCard, "nameZh", originalCardDescriptor);
+      Object.defineProperty(
+        sourceMeaning.upright.categories.general,
+        "advice",
+        originalAdviceDescriptor,
+      );
+    }
   });
 });
 

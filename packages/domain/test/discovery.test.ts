@@ -78,29 +78,21 @@ describe("recordCardDiscovery", () => {
     ]);
   });
 
-  it("appends validated snapshots without rereading stateful records", () => {
+  it("ignores an empty overridden array iterator", () => {
     const persistedRecord = {
       cardId: CARD_ID,
       firstSeenAt: FIRST_SEEN_AT,
     } as const;
     const privateRecordData = "PRIVATE_SECOND_ITERATION_RECORD";
     let iterationCount = 0;
-    const records = {
-      [Symbol.iterator](): Iterator<DiscoveryRecord> {
+    const records: DiscoveryRecord[] = [persistedRecord];
+    Object.defineProperty(records, Symbol.iterator, {
+      configurable: true,
+      value(): Iterator<DiscoveryRecord> {
         iterationCount += 1;
-        const values =
-          iterationCount === 1
-            ? [persistedRecord]
-            : [
-                {
-                  cardId: CARD_ID,
-                  firstSeenAt: LATER_REVEALED_AT,
-                  privateRecordData,
-                },
-              ];
-        return values[Symbol.iterator]();
+        return [][Symbol.iterator]();
       },
-    } as unknown as readonly DiscoveryRecord[];
+    });
 
     const result = recordCardDiscovery(
       records,
@@ -108,7 +100,7 @@ describe("recordCardDiscovery", () => {
       LATER_REVEALED_AT,
     );
 
-    expect(iterationCount).toBe(1);
+    expect(iterationCount).toBe(0);
     expect(result).toEqual([
       persistedRecord,
       { cardId: OTHER_CARD_ID, firstSeenAt: LATER_REVEALED_AT },
@@ -116,33 +108,214 @@ describe("recordCardDiscovery", () => {
     expect(JSON.stringify(result)).not.toContain(privateRecordData);
   });
 
-  it("does not reread a persisted-state iterator that traps after validation", () => {
+  it("ignores a partial overridden array iterator", () => {
     const persistedRecord = {
       cardId: CARD_ID,
       firstSeenAt: FIRST_SEEN_AT,
     } as const;
-    const privateRecordData = "PRIVATE_SECOND_ITERATION_TRAP";
+    const secondRecord = {
+      cardId: OTHER_CARD_ID,
+      firstSeenAt: LATER_REVEALED_AT,
+    } as const;
+    const privateRecordData = "PRIVATE_PARTIAL_ITERATOR_TRAP";
     let iterationCount = 0;
-    const records = {
-      [Symbol.iterator](): Iterator<DiscoveryRecord> {
+    const records: DiscoveryRecord[] = [persistedRecord, secondRecord];
+    Object.defineProperty(records, Symbol.iterator, {
+      configurable: true,
+      value(): Iterator<DiscoveryRecord> {
         iterationCount += 1;
-        if (iterationCount > 1) throw new Error(privateRecordData);
         return [persistedRecord][Symbol.iterator]();
       },
-    } as unknown as readonly DiscoveryRecord[];
+    });
 
     const result = recordCardDiscovery(
       records,
-      OTHER_CARD_ID,
+      "major.high-priestess" as CardId,
       LATER_REVEALED_AT,
     );
 
-    expect(iterationCount).toBe(1);
+    expect(iterationCount).toBe(0);
     expect(result).toEqual([
       persistedRecord,
-      { cardId: OTHER_CARD_ID, firstSeenAt: LATER_REVEALED_AT },
+      secondRecord,
+      {
+        cardId: "major.high-priestess",
+        firstSeenAt: LATER_REVEALED_AT,
+      },
     ]);
     expect(JSON.stringify(result)).not.toContain(privateRecordData);
+  });
+
+  it("rejects a non-array iterable without consuming its iterator", () => {
+    const iteratorSentinel = "PRIVATE_NON_ARRAY_DISCOVERY_ITERATOR";
+    let iteratorCalls = 0;
+    const records = {
+      [Symbol.iterator](): Iterator<DiscoveryRecord> {
+        iteratorCalls += 1;
+        throw new Error(iteratorSentinel);
+      },
+    } as unknown as readonly DiscoveryRecord[];
+
+    expectInvalidDiscoveryState(
+      () => recordCardDiscovery(records, CARD_ID, FIRST_SEEN_AT),
+      "discovery",
+      [iteratorSentinel],
+    );
+    expect(iteratorCalls).toBe(0);
+  });
+
+  it("rejects sparse discovery arrays", () => {
+    const records = new Array<DiscoveryRecord>(2);
+    records[0] = { cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT };
+
+    expectInvalidDiscoveryState(
+      () => recordCardDiscovery(records, OTHER_CARD_ID, LATER_REVEALED_AT),
+      "discovery",
+      [CARD_ID, FIRST_SEEN_AT, OTHER_CARD_ID, LATER_REVEALED_AT],
+    );
+  });
+
+  it("rejects a trapped length that disagrees with the array descriptor", () => {
+    const hiddenSentinel = "PRIVATE_HIDDEN_DISCOVERY_RECORD";
+    let indexedReads = 0;
+    const records = new Proxy(
+      [
+        { cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT },
+        {
+          cardId: OTHER_CARD_ID,
+          firstSeenAt: hiddenSentinel,
+        } as DiscoveryRecord,
+      ],
+      {
+        get(target, property, receiver) {
+          if (property === "length") return 1;
+          if (property === "0" || property === "1") indexedReads += 1;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    expectInvalidDiscoveryState(
+      () =>
+        recordCardDiscovery(
+          records,
+          "major.high-priestess" as CardId,
+          LATER_REVEALED_AT,
+        ),
+      "discovery",
+      [hiddenSentinel],
+    );
+    expect(indexedReads).toBe(0);
+  });
+
+  it("rejects indexed shape changes during snapshotting", () => {
+    const replacementSentinel = "PRIVATE_REPLACED_DISCOVERY_RECORD";
+    const first = { cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT } as const;
+    const records: DiscoveryRecord[] = [
+      first,
+      { cardId: OTHER_CARD_ID, firstSeenAt: LATER_REVEALED_AT },
+    ];
+    Object.defineProperty(records, 0, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        delete records[1];
+        records[1] = {
+          cardId: OTHER_CARD_ID,
+          firstSeenAt: replacementSentinel,
+        };
+        return first;
+      },
+    });
+
+    expectInvalidDiscoveryState(
+      () =>
+        recordCardDiscovery(
+          records,
+          "major.high-priestess" as CardId,
+          LATER_REVEALED_AT,
+        ),
+      "discovery",
+      [replacementSentinel],
+    );
+  });
+
+  it("rejects 79 entries before any indexed scan", () => {
+    const capSentinel = "PRIVATE_DISCOVERY_CAP_SCAN";
+    let indexedDescriptorReads = 0;
+    let indexedValueReads = 0;
+    const records = new Proxy(new Array<DiscoveryRecord>(79), {
+      get(target, property, receiver) {
+        if (property === "length") {
+          return Reflect.get(target, property, receiver);
+        }
+        indexedValueReads += 1;
+        throw new Error(capSentinel);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        if (property === "length") {
+          return Reflect.getOwnPropertyDescriptor(target, property);
+        }
+        indexedDescriptorReads += 1;
+        throw new Error(capSentinel);
+      },
+    });
+
+    expectInvalidDiscoveryState(
+      () => recordCardDiscovery(records, CARD_ID, FIRST_SEEN_AT),
+      "discovery",
+      [capSentinel],
+    );
+    expect(indexedDescriptorReads).toBe(0);
+    expect(indexedValueReads).toBe(0);
+  });
+
+  it("does not consume a poisoned global Array iterator after snapshotting", () => {
+    const originalIteratorDescriptor = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      Symbol.iterator,
+    )!;
+    const iteratorSentinel = "PRIVATE_DISCOVERY_GLOBAL_ITERATOR";
+    let iteratorCalls = 0;
+    const first = new Proxy(
+      { cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT },
+      {
+        get(target, property, receiver) {
+          if (property === "cardId") {
+            Object.defineProperty(Array.prototype, Symbol.iterator, {
+              ...originalIteratorDescriptor,
+              value(): Iterator<unknown> {
+                iteratorCalls += 1;
+                throw new Error(iteratorSentinel);
+              },
+            });
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    let result: readonly DiscoveryRecord[] | undefined;
+    let thrown: unknown;
+    try {
+      try {
+        result = recordCardDiscovery([first], OTHER_CARD_ID, LATER_REVEALED_AT);
+      } catch (error) {
+        thrown = error;
+      }
+    } finally {
+      Object.defineProperty(
+        Array.prototype,
+        Symbol.iterator,
+        originalIteratorDescriptor,
+      );
+    }
+
+    expect(iteratorCalls).toBe(0);
+    expect(thrown).toBeUndefined();
+    expect(result).toEqual([
+      { cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT },
+      { cardId: OTHER_CARD_ID, firstSeenAt: LATER_REVEALED_AT },
+    ]);
   });
 
   it("rejects an invalid reveal time without leaking it", () => {

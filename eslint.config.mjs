@@ -20,6 +20,15 @@ const restrictedDomainGlobals = [
   "Date",
 ];
 
+const restrictedProductionDomainGlobals = [
+  ...restrictedDomainGlobals,
+  "eval",
+  "Function",
+  "setTimeout",
+  "setInterval",
+  "Reflect",
+];
+
 const safeMathConstants = new Set([
   "E",
   "LN10",
@@ -103,6 +112,41 @@ const domainCapabilityPlugin = {
     name: "aura-domain-capabilities",
   },
   rules: {
+    "no-reflection-trampoline": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          forbiddenProperty:
+            "Domain code must not use constructor and prototype trampolines; '{{property}}' access is forbidden.",
+        },
+      },
+      create(context) {
+        return {
+          MemberExpression(node) {
+            const propertyName = node.computed
+              ? node.property.type === "Literal" &&
+                typeof node.property.value === "string"
+                ? node.property.value
+                : undefined
+              : node.property.type === "Identifier"
+                ? node.property.name
+                : undefined;
+            if (
+              propertyName !== "constructor" &&
+              propertyName !== "__proto__"
+            ) {
+              return;
+            }
+            context.report({
+              node,
+              messageId: "forbiddenProperty",
+              data: { property: propertyName },
+            });
+          },
+        };
+      },
+    },
     "safe-math-member": {
       meta: {
         type: "problem",
@@ -228,6 +272,13 @@ export default tseslint.config(
             "Domain code must access Math through a direct property; the Math object must not be aliased or passed.",
         },
       ],
+    },
+  },
+  {
+    files: ["packages/domain/src/**/*.{ts,tsx,cts,mts}"],
+    rules: {
+      "no-restricted-globals": ["error", ...restrictedProductionDomainGlobals],
+      "aura-domain/no-reflection-trampoline": "error",
     },
   },
   {

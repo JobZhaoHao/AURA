@@ -31,9 +31,61 @@ describe("current reading content bundle", () => {
 
   it("maps every canonical card id to its meaning", () => {
     for (const card of CURRENT_READING_CONTENT_BUNDLE.cardCatalog) {
-      expect(CURRENT_READING_CONTENT_BUNDLE.cardMeanings[card.id]).toBe(
+      expect(CURRENT_READING_CONTENT_BUNDLE.cardMeanings[card.id]).toEqual(
         CARD_MEANINGS[card.id],
       );
     }
+  });
+
+  it("rejects assignment to replay versions on the public bundle", () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      CURRENT_READING_CONTENT_BUNDLE,
+      "rulesVersion",
+    )!;
+
+    try {
+      expect(() => {
+        (
+          CURRENT_READING_CONTENT_BUNDLE as unknown as {
+            rulesVersion: string;
+          }
+        ).rulesVersion = "PRIVATE_MUTATED_RULES_VERSION";
+      }).toThrow(TypeError);
+    } finally {
+      Reflect.defineProperty(
+        CURRENT_READING_CONTENT_BUNDLE,
+        "rulesVersion",
+        originalDescriptor,
+      );
+    }
+
+    expect(CURRENT_READING_CONTENT_BUNDLE.rulesVersion).toBe(RULES_VERSION);
+  });
+
+  it("rejects defining a replacement high-risk template", () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      CURRENT_READING_CONTENT_BUNDLE,
+      "highRiskSafetyTemplate",
+    )!;
+
+    try {
+      expect(() =>
+        Object.defineProperty(
+          CURRENT_READING_CONTENT_BUNDLE,
+          "highRiskSafetyTemplate",
+          { ...originalDescriptor, value: "PRIVATE_MUTATED_SAFETY_TEMPLATE" },
+        ),
+      ).toThrow(TypeError);
+    } finally {
+      Reflect.defineProperty(
+        CURRENT_READING_CONTENT_BUNDLE,
+        "highRiskSafetyTemplate",
+        originalDescriptor,
+      );
+    }
+
+    expect(CURRENT_READING_CONTENT_BUNDLE.highRiskSafetyTemplate).toBe(
+      EXPECTED_HIGH_RISK_TEMPLATE,
+    );
   });
 });
