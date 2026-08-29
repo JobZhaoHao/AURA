@@ -104,6 +104,40 @@ for (const [label, source] of mathObjectAliases) {
   });
 }
 
+const unsafeMathMemberEscapes = [
+  ["valueOf object alias", "const M = Math.valueOf(); M.random();"],
+  ["valueOf property alias", "const random = Math.valueOf().random; random();"],
+  ["valueOf destructuring", "const { random } = Math.valueOf(); random();"],
+  [
+    "constructor escape",
+    "Math.constructor.constructor('return Math')().random();",
+  ],
+  ["prototype escape", "Math.__proto__.random();"],
+  ["unknown computed member", 'Math["notANumericMember"]();'],
+  [
+    "non-literal computed escape",
+    "const k = 'valueOf'; const M = Math[k](); M.random();",
+  ],
+];
+
+for (const [label, source] of unsafeMathMemberEscapes) {
+  test(`domain ESLint override rejects Math ${label}`, async () => {
+    const [result] = await eslint.lintText(source, {
+      filePath: virtualDomainFile,
+    });
+
+    assert.ok(result);
+    assert.ok(
+      result.messages.some(
+        ({ ruleId, message }) =>
+          ruleId === "aura-domain/safe-math-member" &&
+          message.includes("safe numeric Math members"),
+      ),
+      JSON.stringify(result.messages),
+    );
+  });
+}
+
 test("domain ESLint override allows safe Math properties", async () => {
   const source = [
     "Math.abs(-1);",
@@ -111,6 +145,8 @@ test("domain ESLint override allows safe Math properties", async () => {
     'Math["floor"](1.2);',
     "Math?.abs(-1);",
     'Math?.["floor"](1.2);',
+    "Math.abs(Math.PI);",
+    'Math.abs(Math["E"]);',
   ].join("\n");
   const [result] = await eslint.lintText(source, {
     filePath: virtualDomainFile,

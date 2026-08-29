@@ -20,6 +20,102 @@ const restrictedDomainGlobals = [
   "Date",
 ];
 
+const safeMathMembers = new Set([
+  "E",
+  "LN10",
+  "LN2",
+  "LOG10E",
+  "LOG2E",
+  "PI",
+  "SQRT1_2",
+  "SQRT2",
+  "abs",
+  "acos",
+  "acosh",
+  "asin",
+  "asinh",
+  "atan",
+  "atan2",
+  "atanh",
+  "cbrt",
+  "ceil",
+  "clz32",
+  "cos",
+  "cosh",
+  "exp",
+  "expm1",
+  "floor",
+  "fround",
+  "hypot",
+  "imul",
+  "log",
+  "log10",
+  "log1p",
+  "log2",
+  "max",
+  "min",
+  "pow",
+  "round",
+  "sign",
+  "sin",
+  "sinh",
+  "sqrt",
+  "tan",
+  "tanh",
+  "trunc",
+]);
+
+const domainCapabilityPlugin = {
+  meta: {
+    name: "aura-domain-capabilities",
+  },
+  rules: {
+    "safe-math-member": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          unsafeMember:
+            "Domain code may access only safe numeric Math members; '{{member}}' is not allowed.",
+        },
+      },
+      create(context) {
+        return {
+          MemberExpression(node) {
+            if (
+              node.object.type !== "Identifier" ||
+              node.object.name !== "Math"
+            ) {
+              return;
+            }
+
+            const memberName = node.computed
+              ? node.property.type === "Literal" &&
+                typeof node.property.value === "string"
+                ? node.property.value
+                : undefined
+              : node.property.type === "Identifier"
+                ? node.property.name
+                : undefined;
+
+            if (memberName !== undefined && safeMathMembers.has(memberName)) {
+              return;
+            }
+
+            context.report({
+              node,
+              messageId: "unsafeMember",
+              data: {
+                member: memberName ?? "non-literal computed member",
+              },
+            });
+          },
+        };
+      },
+    },
+  },
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -46,6 +142,9 @@ export default tseslint.config(
     linterOptions: {
       noInlineConfig: true,
     },
+    plugins: {
+      "aura-domain": domainCapabilityPlugin,
+    },
     rules: {
       "no-restricted-imports": [
         "error",
@@ -55,6 +154,7 @@ export default tseslint.config(
         },
       ],
       "no-restricted-globals": ["error", ...restrictedDomainGlobals],
+      "aura-domain/safe-math-member": "error",
       "no-restricted-properties": [
         "error",
         {
