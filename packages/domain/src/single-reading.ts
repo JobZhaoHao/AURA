@@ -24,25 +24,29 @@ export type SingleCardReadingResult = Omit<
 export function createSingleReading(
   input: SingleReadingInput,
 ): SingleCardReadingResult {
-  assertParsedSingleReadingInput(input);
+  const parsedInput = assertParsedSingleReadingInput(input);
 
   const bundle = CURRENT_READING_CONTENT_BUNDLE;
-  const draw = drawSingleCard(input.seed, input.reversalsEnabled, bundle);
+  const draw = drawSingleCard(
+    parsedInput.seed,
+    parsedInput.reversalsEnabled,
+    bundle,
+  );
   const result: SingleCardReadingResult = {
     session: {
-      sessionId: input.sessionId,
+      sessionId: parsedInput.sessionId,
       mode: "single",
-      questionCategory: input.questionCategory,
-      safetyDisposition: input.safetyDisposition,
+      questionCategory: parsedInput.questionCategory,
+      safetyDisposition: parsedInput.safetyDisposition,
       rulesVersion: bundle.rulesVersion,
       contentVersion: bundle.contentVersion,
-      createdAt: input.createdAt,
+      createdAt: parsedInput.createdAt,
       draws: [draw],
     },
     narrative: composeSingleNarrative(
       draw,
-      input.questionCategory,
-      input.safetyDisposition,
+      parsedInput.questionCategory,
+      parsedInput.safetyDisposition,
     ),
     textVersion: bundle.textVersion,
   };

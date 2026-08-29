@@ -92,6 +92,29 @@ describe("createSingleReading", () => {
     ).not.toThrow();
   });
 
+  it("contains a branded proxy that fails on its second seed read", () => {
+    const sentinel = "PRIVATE_PROXY_SENTINEL";
+    const parsed = parseSingleReadingInput(FIXED_READING_INPUT);
+    let seedReads = 0;
+    const brandedProxy = new Proxy(parsed, {
+      get(target, property, receiver) {
+        if (property === "seed" && ++seedReads === 2) {
+          throw new Error(sentinel);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    try {
+      createSingleReading(brandedProxy);
+      throw new Error("Expected branded proxy to throw.");
+    } catch (error) {
+      expectSafeDomainError(error, "INVALID_READING_INPUT", "input", [
+        sentinel,
+      ]);
+    }
+  });
+
   it.each([
     ["exact-shape cast", FIXED_READING_INPUT as unknown as SingleReadingInput],
     [

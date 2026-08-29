@@ -53,12 +53,7 @@ export function parseSingleReadingInput(value: unknown): SingleReadingInput {
     const fields = validateSingleReadingInputFields(value, (field) => {
       safeField = field;
     });
-    const parsed = { ...fields } as SingleReadingInput;
-    Object.defineProperty(parsed, parsedSingleReadingInput, {
-      value: true,
-      enumerable: false,
-    });
-    return Object.freeze(parsed);
+    return createParsedSingleReadingInput(fields);
   } catch {
     throw new DomainError("INVALID_READING_INPUT", safeField);
   }
@@ -66,7 +61,7 @@ export function parseSingleReadingInput(value: unknown): SingleReadingInput {
 
 export function assertParsedSingleReadingInput(
   value: unknown,
-): asserts value is SingleReadingInput {
+): SingleReadingInput {
   let safeField: DomainErrorField = "input";
   try {
     if (!isExactInputObject(value, true) || !Object.isFrozen(value)) {
@@ -89,12 +84,43 @@ export function assertParsedSingleReadingInput(
       throw new Error("Invalid reading input brand.");
     }
 
-    validateSingleReadingInputFields(value, (field) => {
+    const fields = validateSingleReadingInputFields(value, (field) => {
       safeField = field;
     });
+    safeField = "input";
+    const repeatedFields = validateSingleReadingInputFields(value, () => {});
+    if (!isSameSingleReadingInputFields(fields, repeatedFields)) {
+      throw new Error("Unstable reading input.");
+    }
+    return createParsedSingleReadingInput(fields);
   } catch {
     throw new DomainError("INVALID_READING_INPUT", safeField);
   }
+}
+
+function isSameSingleReadingInputFields(
+  first: SingleReadingInputFields,
+  second: SingleReadingInputFields,
+): boolean {
+  return (
+    first.seed === second.seed &&
+    first.sessionId === second.sessionId &&
+    first.questionCategory === second.questionCategory &&
+    first.safetyDisposition === second.safetyDisposition &&
+    first.reversalsEnabled === second.reversalsEnabled &&
+    first.createdAt === second.createdAt
+  );
+}
+
+function createParsedSingleReadingInput(
+  fields: SingleReadingInputFields,
+): SingleReadingInput {
+  const parsed = { ...fields } as SingleReadingInput;
+  Object.defineProperty(parsed, parsedSingleReadingInput, {
+    value: true,
+    enumerable: false,
+  });
+  return Object.freeze(parsed);
 }
 
 function isExactInputObject(
