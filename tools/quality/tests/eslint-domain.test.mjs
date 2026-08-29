@@ -75,22 +75,49 @@ for (const [label, source] of randomPropertyAcquisitions) {
   });
 }
 
+const mathObjectAliases = [
+  ["direct alias", "const M = Math; M.random();"],
+  [
+    "property alias through object alias",
+    "const M = Math; const random = M.random; random();",
+  ],
+  [
+    "destructuring through object alias",
+    "const M = Math; const { random } = M; random();",
+  ],
+];
+
+for (const [label, source] of mathObjectAliases) {
+  test(`domain ESLint override rejects Math object ${label}`, async () => {
+    const [result] = await eslint.lintText(source, {
+      filePath: virtualDomainFile,
+    });
+
+    assert.ok(result);
+    assert.ok(
+      result.messages.some(
+        ({ ruleId, message }) =>
+          ruleId === "no-restricted-syntax" && message.includes("Math object"),
+      ),
+      JSON.stringify(result.messages),
+    );
+  });
+}
+
 test("domain ESLint override allows safe Math properties", async () => {
   const source = [
-    "Math.max(1, 2);",
+    "Math.abs(-1);",
     "const abs = Math.abs; abs(-1);",
-    "const { floor } = Math; floor(1.2);",
+    'Math["floor"](1.2);',
+    "Math?.abs(-1);",
+    'Math?.["floor"](1.2);',
   ].join("\n");
   const [result] = await eslint.lintText(source, {
     filePath: virtualDomainFile,
   });
 
   assert.ok(result);
-  assert.equal(
-    result.messages.some(({ ruleId }) => ruleId === "no-restricted-properties"),
-    false,
-    JSON.stringify(result.messages),
-  );
+  assert.deepEqual(result.messages, []);
 });
 
 const inlineEscapeProbes = [

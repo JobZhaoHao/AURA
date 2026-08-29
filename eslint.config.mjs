@@ -64,6 +64,15 @@ export default tseslint.config(
             "Domain randomness must use the deterministic random module.",
         },
       ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "Identifier[name='Math']:not(MemberExpression[object.name='Math'] > Identifier[name='Math'])",
+          message:
+            "Domain code must access Math through a direct property; the Math object must not be aliased or passed.",
+        },
+      ],
     },
   },
   {
