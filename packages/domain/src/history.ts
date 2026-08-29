@@ -81,14 +81,6 @@ export function appendLocalHistoryEntry(
         parseHistoryEntry(persistedEntry, { safeField: "history" }),
       );
     }
-
-    const sessionIds = new Set<string>();
-    for (const persistedEntry of parsedHistory) {
-      if (sessionIds.has(persistedEntry.session.sessionId)) {
-        throw new Error("Duplicate persisted session ID.");
-      }
-      sessionIds.add(persistedEntry.session.sessionId);
-    }
   } catch {
     throw new DomainError("INVALID_HISTORY_ENTRY", "history");
   }
@@ -101,6 +93,18 @@ export function appendLocalHistoryEntry(
     parsedEntry = parseHistoryEntry(entry, incomingContext);
   } catch {
     throw new DomainError("INVALID_HISTORY_ENTRY", incomingContext.safeField);
+  }
+
+  try {
+    const sessionIds = new Set<string>();
+    for (const persistedEntry of parsedHistory) {
+      if (sessionIds.has(persistedEntry.session.sessionId)) {
+        throw new Error("Duplicate persisted session ID.");
+      }
+      sessionIds.add(persistedEntry.session.sessionId);
+    }
+  } catch {
+    throw new DomainError("INVALID_HISTORY_ENTRY", "history");
   }
 
   const existing = parsedHistory.find(

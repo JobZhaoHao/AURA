@@ -332,6 +332,24 @@ describe("appendLocalHistoryEntry", () => {
     );
   });
 
+  it("validates a forged incoming entry before duplicate persisted session lookup", () => {
+    const duplicatedSession = [
+      saved(),
+      saved(reading(), "2026-08-30T00:00:00.000Z"),
+    ];
+    const sentinel = "PRIVATE_COMBINED_FORGED_ENTRY";
+    const forgedIncoming = {
+      privateEntryData: sentinel,
+    } as unknown as LocalHistoryEntry;
+
+    expectHistoryError(
+      () => appendLocalHistoryEntry(duplicatedSession, forgedIncoming),
+      "INVALID_HISTORY_ENTRY",
+      "result",
+      [sentinel, SESSION_ID],
+    );
+  });
+
   it.each([
     ["forged entry", "result", "PRIVATE_FORGED_ENTRY"],
     ["saved time", "savedAt", "PRIVATE_INCOMING_SAVED_AT"],
