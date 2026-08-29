@@ -144,20 +144,33 @@ export function appendLocalHistoryEntry(
   history: readonly LocalHistoryEntry[],
   entry: LocalHistoryEntry,
 ): readonly LocalHistoryEntry[] {
+  let initialArrayIteratorDescriptor: PropertyDescriptor | undefined;
   let historySnapshot: readonly unknown[];
   try {
+    initialArrayIteratorDescriptor = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      Symbol.iterator,
+    );
     historySnapshot = snapshotDenseStableHistory(history);
+    restoreArrayIterator(initialArrayIteratorDescriptor);
   } catch {
+    try {
+      restoreArrayIterator(initialArrayIteratorDescriptor);
+    } catch {
+      // The public error below remains fixed even if the hostile mutation
+      // made the global iterator impossible to restore.
+    }
     throw new DomainError("INVALID_HISTORY_ENTRY", "history");
   }
 
   let parsedHistory: LocalHistoryEntry[];
   try {
     parsedHistory = [];
-    for (const persistedEntry of historySnapshot) {
-      parsedHistory.push(
-        parseHistoryEntry(persistedEntry, { safeField: "history" }),
-      );
+    const historyLength = historySnapshot.length;
+    for (let index = 0; index < historyLength; index += 1) {
+      parsedHistory[index] = parseHistoryEntry(historySnapshot[index], {
+        safeField: "history",
+      });
     }
   } catch {
     throw new DomainError("INVALID_HISTORY_ENTRY", "history");
@@ -175,7 +188,9 @@ export function appendLocalHistoryEntry(
 
   try {
     const sessionIds = new Set<string>();
-    for (const persistedEntry of parsedHistory) {
+    const parsedHistoryLength = parsedHistory.length;
+    for (let index = 0; index < parsedHistoryLength; index += 1) {
+      const persistedEntry = parsedHistory[index]!;
       if (sessionIds.has(persistedEntry.session.sessionId)) {
         throw new Error("Duplicate persisted session ID.");
       }
@@ -185,14 +200,54 @@ export function appendLocalHistoryEntry(
     throw new DomainError("INVALID_HISTORY_ENTRY", "history");
   }
 
-  const existing = parsedHistory.find(
-    (persistedEntry) =>
-      persistedEntry.session.sessionId === parsedEntry.session.sessionId,
-  );
-  if (existing === undefined) return [...parsedHistory, parsedEntry];
-  if (sameReadingResult(existing, parsedEntry)) return [...parsedHistory];
+  let existing: LocalHistoryEntry | undefined;
+  const parsedHistoryLength = parsedHistory.length;
+  for (let index = 0; index < parsedHistoryLength; index += 1) {
+    const persistedEntry = parsedHistory[index]!;
+    if (persistedEntry.session.sessionId === parsedEntry.session.sessionId) {
+      existing = persistedEntry;
+      break;
+    }
+  }
+  if (existing === undefined) {
+    return copyHistoryWithEntry(parsedHistory, parsedEntry);
+  }
+  if (sameReadingResult(existing, parsedEntry)) {
+    return copyHistoryWithEntry(parsedHistory);
+  }
 
   throw new DomainError("HISTORY_SESSION_CONFLICT", "sessionId");
+}
+
+function copyHistoryWithEntry(
+  history: readonly LocalHistoryEntry[],
+  entry?: LocalHistoryEntry,
+): readonly LocalHistoryEntry[] {
+  const copied: LocalHistoryEntry[] = [];
+  const historyLength = history.length;
+  for (let index = 0; index < historyLength; index += 1) {
+    copied[index] = history[index]!;
+  }
+  if (entry !== undefined) copied[historyLength] = entry;
+  return copied;
+}
+
+function restoreArrayIterator(
+  initialDescriptor: PropertyDescriptor | undefined,
+): void {
+  const currentDescriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype,
+    Symbol.iterator,
+  );
+  if (samePropertyDescriptor(currentDescriptor, initialDescriptor)) return;
+
+  if (initialDescriptor === undefined) {
+    if (!Reflect.deleteProperty(Array.prototype, Symbol.iterator)) {
+      throw new Error("Unable to restore array iterator.");
+    }
+    return;
+  }
+  Object.defineProperty(Array.prototype, Symbol.iterator, initialDescriptor);
 }
 
 function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
@@ -232,7 +287,7 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
     if (descriptor === undefined) {
       throw new Error("Sparse history collection.");
     }
-    initialDescriptors.push(descriptor);
+    initialDescriptors[index] = descriptor;
   }
   if (!hasStableArrayLength(value, lengthDescriptor, initialLength)) {
     throw new Error("Unstable history collection.");
@@ -250,7 +305,7 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
       throw new Error("Unstable history collection.");
     }
 
-    snapshot.push(value[index]);
+    snapshot[index] = value[index];
 
     if (
       !hasStableArrayLength(value, lengthDescriptor, initialLength) ||
@@ -362,8 +417,11 @@ function parseHistoryEntry(
     "themeRef",
     "deckRef",
   ]);
-  if (keys.some((key) => !allowedKeys.has(key))) {
-    throw new Error("Invalid history entry key.");
+  const keyCount = keys.length;
+  for (let index = 0; index < keyCount; index += 1) {
+    if (!allowedKeys.has(keys[index]!)) {
+      throw new Error("Invalid history entry key.");
+    }
   }
 
   const session = externalEntry.session;
@@ -415,13 +473,19 @@ function sameDraws(
   left: readonly ReadingDraw[],
   right: readonly ReadingDraw[],
 ): boolean {
-  return (
-    left.length === right.length &&
-    left.every(
-      (draw, index) =>
-        draw.cardId === right[index]?.cardId &&
-        draw.orientation === right[index]?.orientation &&
-        draw.position === right[index]?.position,
-    )
-  );
+  const leftLength = left.length;
+  if (leftLength !== right.length) return false;
+  for (let index = 0; index < leftLength; index += 1) {
+    const leftDraw = left[index]!;
+    const rightDraw = right[index];
+    if (
+      rightDraw === undefined ||
+      leftDraw.cardId !== rightDraw.cardId ||
+      leftDraw.orientation !== rightDraw.orientation ||
+      leftDraw.position !== rightDraw.position
+    ) {
+      return false;
+    }
+  }
+  return true;
 }

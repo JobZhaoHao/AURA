@@ -572,6 +572,52 @@ describe("appendLocalHistoryEntry", () => {
     );
   });
 
+  it("does not consult a prototype iterator installed by an indexed getter", () => {
+    const originalIteratorDescriptor = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      Symbol.iterator,
+    )!;
+    const originalIterator =
+      originalIteratorDescriptor.value as () => Iterator<unknown>;
+    const first = saved();
+    const incoming = saved(reading({ sessionId: "history-session-003" }));
+    const history = [first];
+    let iteratorCalls = 0;
+    Object.defineProperty(history, 0, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        Object.defineProperty(Array.prototype, Symbol.iterator, {
+          ...originalIteratorDescriptor,
+          value(): Iterator<unknown> {
+            iteratorCalls += 1;
+            Object.defineProperty(
+              Array.prototype,
+              Symbol.iterator,
+              originalIteratorDescriptor,
+            );
+            return originalIterator.call([]);
+          },
+        });
+        return first;
+      },
+    });
+
+    let appended: readonly LocalHistoryEntry[] | undefined;
+    try {
+      appended = appendLocalHistoryEntry(history, incoming);
+    } finally {
+      Object.defineProperty(
+        Array.prototype,
+        Symbol.iterator,
+        originalIteratorDescriptor,
+      );
+    }
+
+    expect(appended).toEqual([first, incoming]);
+    expect(iteratorCalls).toBe(0);
+  });
+
   it.each([
     ["corrupt record", "corrupt"],
     ["duplicate session", "duplicate"],
@@ -671,6 +717,39 @@ describe("appendLocalHistoryEntry", () => {
       expect(indexedDescriptorReads).toBe(0);
     },
   );
+
+  it("rejects 10,001 entries before any indexed descriptor or value scan", () => {
+    const capSentinel = "PRIVATE_HISTORY_CAP_SCAN";
+    let indexedDescriptorReads = 0;
+    let indexedValueReads = 0;
+    const history = new Proxy(new Array<LocalHistoryEntry>(10_001), {
+      get(target, property, receiver) {
+        if (property === "length") return 10_001;
+        indexedValueReads += 1;
+        throw new Error(capSentinel);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        if (property === "length") {
+          return Reflect.getOwnPropertyDescriptor(target, property);
+        }
+        indexedDescriptorReads += 1;
+        throw new Error(capSentinel);
+      },
+    });
+
+    expectHistoryError(
+      () =>
+        appendLocalHistoryEntry(
+          history,
+          saved(reading({ sessionId: "history-session-003" })),
+        ),
+      "INVALID_HISTORY_ENTRY",
+      "history",
+      [capSentinel],
+    );
+    expect(indexedDescriptorReads).toBe(0);
+    expect(indexedValueReads).toBe(0);
+  });
 
   it("never enumerates unbounded non-index history keys", () => {
     const ownKeysSentinel = "PRIVATE_HISTORY_OWN_KEYS";
