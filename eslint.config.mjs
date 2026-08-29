@@ -1,6 +1,25 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
+const restrictedDomainGlobals = [
+  "console",
+  "process",
+  "window",
+  "document",
+  "fetch",
+  "localStorage",
+  "globalThis",
+  "global",
+  "crypto",
+  "performance",
+  "XMLHttpRequest",
+  "WebSocket",
+  "navigator",
+  "location",
+  "require",
+  "Date",
+];
+
 export default tseslint.config(
   {
     ignores: [
@@ -24,6 +43,9 @@ export default tseslint.config(
   },
   {
     files: ["packages/domain/**/*.{ts,tsx,cts,mts}"],
+    linterOptions: {
+      noInlineConfig: true,
+    },
     rules: {
       "no-restricted-imports": [
         "error",
@@ -32,32 +54,24 @@ export default tseslint.config(
           patterns: ["@cloudbase/*", "@anthropic-ai/*"],
         },
       ],
-      "no-restricted-globals": [
-        "error",
-        "console",
-        "process",
-        "window",
-        "document",
-        "fetch",
-        "localStorage",
-        "globalThis",
-        "crypto",
-        "performance",
-        "XMLHttpRequest",
-        "WebSocket",
-        "navigator",
-        "location",
-        "require",
-        "Date",
-      ],
-      "no-restricted-syntax": [
+      "no-restricted-globals": ["error", ...restrictedDomainGlobals],
+      "no-restricted-properties": [
         "error",
         {
-          selector:
-            "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+          object: "Math",
+          property: "random",
           message:
             "Domain randomness must use the deterministic random module.",
         },
+      ],
+    },
+  },
+  {
+    files: ["packages/domain/test/history.test.ts"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        ...restrictedDomainGlobals.filter((name) => name !== "global"),
       ],
     },
   },

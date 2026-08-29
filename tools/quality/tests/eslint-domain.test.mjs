@@ -21,6 +21,12 @@ const restrictedGlobals = [
   ["XHR networking", "new XMLHttpRequest();", "XMLHttpRequest"],
   ["WebSocket networking", "new WebSocket('wss://example.test');", "WebSocket"],
   ["global escape", "globalThis.fetch('https://example.test');", "globalThis"],
+  [
+    "Node global fetch escape",
+    "global.fetch('https://example.test');",
+    "global",
+  ],
+  ["Node global Math escape", "global.Math.random();", "global"],
 ];
 
 for (const [label, source, globalName] of restrictedGlobals) {
@@ -40,14 +46,82 @@ for (const [label, source, globalName] of restrictedGlobals) {
   });
 }
 
-test("domain ESLint override retains the Math.random syntax gate", async () => {
-  const [result] = await eslint.lintText("Math.random();", {
+const randomPropertyAcquisitions = [
+  ["direct call", "Math.random();"],
+  ["aliased call", "const random = Math.random; random();"],
+  ["computed call", 'Math["random"]();'],
+  ["destructured call", "const { random } = Math; random();"],
+  ["optional call", "Math?.random();"],
+  ["optional computed call", 'Math?.["random"]();'],
+  ["renamed destructured call", "const { random: rng } = Math; rng();"],
+  ["computed destructured call", 'const { ["random"]: rng } = Math; rng();'],
+];
+
+for (const [label, source] of randomPropertyAcquisitions) {
+  test(`domain ESLint override rejects Math.random ${label}`, async () => {
+    const [result] = await eslint.lintText(source, {
+      filePath: virtualDomainFile,
+    });
+
+    assert.ok(result);
+    assert.ok(
+      result.messages.some(
+        ({ ruleId, message }) =>
+          ruleId === "no-restricted-properties" &&
+          message.includes("Domain randomness"),
+      ),
+      JSON.stringify(result.messages),
+    );
+  });
+}
+
+test("domain ESLint override allows safe Math properties", async () => {
+  const source = [
+    "Math.max(1, 2);",
+    "const abs = Math.abs; abs(-1);",
+    "const { floor } = Math; floor(1.2);",
+  ].join("\n");
+  const [result] = await eslint.lintText(source, {
     filePath: virtualDomainFile,
   });
 
   assert.ok(result);
-  assert.ok(
-    result.messages.some(({ ruleId }) => ruleId === "no-restricted-syntax"),
+  assert.equal(
+    result.messages.some(({ ruleId }) => ruleId === "no-restricted-properties"),
+    false,
     JSON.stringify(result.messages),
   );
 });
+
+const inlineEscapeProbes = [
+  [
+    "restricted global",
+    [
+      "// eslint-disable-next-line no-restricted-globals",
+      "globalThis.fetch('https://example.test');",
+    ].join("\n"),
+    "no-restricted-globals",
+  ],
+  [
+    "random property",
+    [
+      "// eslint-disable-next-line no-restricted-properties",
+      "Math.random();",
+    ].join("\n"),
+    "no-restricted-properties",
+  ],
+];
+
+for (const [label, source, capabilityRuleId] of inlineEscapeProbes) {
+  test(`domain ESLint override ignores inline disable for ${label}`, async () => {
+    const [result] = await eslint.lintText(source, {
+      filePath: virtualDomainFile,
+    });
+
+    assert.ok(result);
+    assert.ok(
+      result.messages.some(({ ruleId }) => ruleId === capabilityRuleId),
+      JSON.stringify(result.messages),
+    );
+  });
+}
