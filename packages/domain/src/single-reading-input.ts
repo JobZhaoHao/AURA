@@ -24,10 +24,6 @@ const SINGLE_READING_INPUT_KEYS = [
 ] as const;
 const OPAQUE_INPUT_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
-class InvalidReadingInputFailure {
-  constructor(readonly field: DomainErrorField) {}
-}
-
 type SingleReadingInputFields = {
   seed: string;
   sessionId: string;
@@ -48,29 +44,33 @@ export type SingleReadingInput = Readonly<{
   ParsedSingleReadingInputBrand;
 
 export function parseSingleReadingInput(value: unknown): SingleReadingInput {
+  let safeField: DomainErrorField = "input";
   try {
     if (!isExactInputObject(value)) {
-      throw new InvalidReadingInputFailure("input");
+      throw new Error("Invalid reading input shape.");
     }
 
-    const fields = validateSingleReadingInputFields(value);
+    const fields = validateSingleReadingInputFields(value, (field) => {
+      safeField = field;
+    });
     const parsed = { ...fields } as SingleReadingInput;
     Object.defineProperty(parsed, parsedSingleReadingInput, {
       value: true,
       enumerable: false,
     });
     return Object.freeze(parsed);
-  } catch (error) {
-    throw toSafeInputDomainError(error);
+  } catch {
+    throw new DomainError("INVALID_READING_INPUT", safeField);
   }
 }
 
 function assertParsedSingleReadingInput(
   value: unknown,
 ): asserts value is SingleReadingInput {
+  let safeField: DomainErrorField = "input";
   try {
     if (!isExactInputObject(value, true) || !Object.isFrozen(value)) {
-      throw new InvalidReadingInputFailure("input");
+      throw new Error("Invalid reading input shape.");
     }
 
     const symbols = Object.getOwnPropertySymbols(value);
@@ -86,12 +86,14 @@ function assertParsedSingleReadingInput(
       brand.configurable ||
       brand.writable
     ) {
-      throw new InvalidReadingInputFailure("input");
+      throw new Error("Invalid reading input brand.");
     }
 
-    validateSingleReadingInputFields(value);
-  } catch (error) {
-    throw toSafeInputDomainError(error);
+    validateSingleReadingInputFields(value, (field) => {
+      safeField = field;
+    });
+  } catch {
+    throw new DomainError("INVALID_READING_INPUT", safeField);
   }
 }
 
@@ -121,89 +123,51 @@ function isExactInputObject(
 
 function validateSingleReadingInputFields(
   value: Record<(typeof SINGLE_READING_INPUT_KEYS)[number], unknown>,
+  setSafeField: (field: DomainErrorField) => void,
 ): SingleReadingInputFields {
-  const seed = parseOpaqueField(value.seed, "seed");
-  const sessionId = parseOpaqueField(value.sessionId, "sessionId");
-  parseSchemaField(
-    sessionId,
-    ReadingSessionSchema.shape.sessionId,
-    "sessionId",
+  setSafeField("input");
+  const seedValue = value.seed;
+  setSafeField("seed");
+  const seed = parseOpaqueField(seedValue);
+  setSafeField("input");
+  const sessionIdValue = value.sessionId;
+  setSafeField("sessionId");
+  const sessionId = parseOpaqueField(sessionIdValue);
+  ReadingSessionSchema.shape.sessionId.parse(sessionId);
+  setSafeField("input");
+  const questionCategoryValue = value.questionCategory;
+  setSafeField("questionCategory");
+  const questionCategory = QuestionCategorySchema.parse(questionCategoryValue);
+  setSafeField("input");
+  const safetyDispositionValue = value.safetyDisposition;
+  setSafeField("safetyDisposition");
+  const safetyDisposition = SafetyDispositionSchema.parse(
+    safetyDispositionValue,
   );
-  const questionCategory = parseSchemaField(
-    value.questionCategory,
-    QuestionCategorySchema,
-    "questionCategory",
-  );
-  const safetyDisposition = parseSchemaField(
-    value.safetyDisposition,
-    SafetyDispositionSchema,
-    "safetyDisposition",
-  );
-  if (typeof value.reversalsEnabled !== "boolean") {
-    throw new InvalidReadingInputFailure("reversalsEnabled");
+  setSafeField("input");
+  const reversalsEnabled = value.reversalsEnabled;
+  setSafeField("reversalsEnabled");
+  if (typeof reversalsEnabled !== "boolean") {
+    throw new Error("Invalid reversals setting.");
   }
-  const createdAt = parseSchemaField(
-    value.createdAt,
-    ReadingSessionSchema.shape.createdAt,
-    "createdAt",
-  );
+  setSafeField("input");
+  const createdAtValue = value.createdAt;
+  setSafeField("createdAt");
+  const createdAt = ReadingSessionSchema.shape.createdAt.parse(createdAtValue);
 
   return {
     seed,
     sessionId,
     questionCategory,
     safetyDisposition,
-    reversalsEnabled: value.reversalsEnabled,
+    reversalsEnabled,
     createdAt,
   };
 }
 
-function parseOpaqueField(value: unknown, field: DomainErrorField): string {
+function parseOpaqueField(value: unknown): string {
   if (typeof value !== "string" || !OPAQUE_INPUT_PATTERN.test(value)) {
-    throw new InvalidReadingInputFailure(field);
+    throw new Error("Invalid opaque input.");
   }
   return value;
-}
-
-function parseSchemaField<T>(
-  value: unknown,
-  schema: { parse(value: unknown): T },
-  field: DomainErrorField,
-): T {
-  try {
-    return schema.parse(value);
-  } catch {
-    throw new InvalidReadingInputFailure(field);
-  }
-}
-
-function toSafeInputDomainError(error: unknown): DomainError {
-  if (
-    error instanceof InvalidReadingInputFailure &&
-    isDomainErrorField(error.field)
-  ) {
-    return new DomainError("INVALID_READING_INPUT", error.field);
-  }
-  return new DomainError("INVALID_READING_INPUT", "input");
-}
-
-function isDomainErrorField(value: unknown): value is DomainErrorField {
-  return [
-    "input",
-    "seed",
-    "sessionId",
-    "questionCategory",
-    "safetyDisposition",
-    "reversalsEnabled",
-    "createdAt",
-    "cardId",
-    "revealedAt",
-    "discovery",
-    "result",
-    "savedAt",
-    "history",
-    "themeRef",
-    "deckRef",
-    "version",
-  ].includes(value as DomainErrorField);
 }

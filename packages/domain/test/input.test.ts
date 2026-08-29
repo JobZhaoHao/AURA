@@ -114,6 +114,43 @@ describe("parseSingleReadingInput", () => {
     }
   });
 
+  it("contains proxy errors that trap trusted-failure classification", () => {
+    const sentinel = "PRIVATE_INSTANCEOF_SENTINEL";
+    const hostileError = new Proxy(new Error("untrusted"), {
+      getPrototypeOf() {
+        const error = new DomainError("UNKNOWN_CARD_CONTENT", "cardId");
+        error.message = sentinel;
+        Object.assign(error, { cause: sentinel, issues: [sentinel] });
+        throw error;
+      },
+    });
+    const hostile = new Proxy(
+      { ...validInput },
+      {
+        get(target, property, receiver) {
+          if (property === "seed") throw hostileError;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    try {
+      parseSingleReadingInput(hostile);
+      throw new Error("Expected hostile input to throw.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      expect(String(error)).toBe("DomainError: The reading input is invalid.");
+      expect(Object.keys(error)).toEqual(["code", "field"]);
+      expect(JSON.stringify(error)).toBe(
+        JSON.stringify({ code: "INVALID_READING_INPUT", field: "input" }),
+      );
+      expect("cause" in (error as DomainError)).toBe(false);
+      expect("issues" in (error as DomainError)).toBe(false);
+      expect(JSON.stringify(error)).not.toContain(sentinel);
+      expect(String(error)).not.toContain(sentinel);
+    }
+  });
+
   it("rejects non-enumerable unknown input keys", () => {
     const candidate = { ...validInput };
     Object.defineProperty(candidate, "rawQuestion", {
