@@ -1,7 +1,7 @@
 # AURA M1 Phase 2 单卡领域闭环设计
 
 - 日期：2026-08-29
-- 状态：方案 1 已由产品所有者批准；书面规格已通过独立审查，待产品所有者复核
+- 状态：产品所有者已确认；书面规格已通过领域、安全隐私和项目管控独立审查
 - 基线提交：`6c4e0ce31da2fd70b374093b3d1bcdcedd84de04`
 - 前置阶段：[M1 Phase 1 已通过产品验收与固定版本托管 CI](../../acceptance/2026-08-29-aura-m1-phase-1-acceptance.md)
 - 上位规格：[AURA Milestone 1 核心玩法纵切设计](2026-08-28-aura-milestone-1-core-gameplay-design.md)
