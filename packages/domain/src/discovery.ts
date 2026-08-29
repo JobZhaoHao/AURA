@@ -51,8 +51,8 @@ export function recordCardDiscovery(
     }
 
     return existingCardIds.has(candidate.cardId)
-      ? records
-      : [...records, candidate];
+      ? parsedRecords
+      : [...parsedRecords, candidate];
   } catch {
     throw new DomainError("INVALID_DISCOVERY_STATE", safeField);
   }

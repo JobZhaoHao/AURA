@@ -49,14 +49,14 @@ describe("recordCardDiscovery", () => {
     ]);
   });
 
-  it("keeps the original first-seen time for a duplicate reveal", () => {
-    const records: readonly DiscoveryRecord[] = [
-      { cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT },
-    ];
+  it("returns a sanitized snapshot for a duplicate reveal", () => {
+    const existing = { cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT } as const;
+    const records: readonly DiscoveryRecord[] = [existing];
 
     const result = recordCardDiscovery(records, CARD_ID, LATER_REVEALED_AT);
 
-    expect(result).toBe(records);
+    expect(result).not.toBe(records);
+    expect(result[0]).not.toBe(existing);
     expect(result).toEqual([{ cardId: CARD_ID, firstSeenAt: FIRST_SEEN_AT }]);
   });
 
@@ -76,6 +76,73 @@ describe("recordCardDiscovery", () => {
       existing,
       { cardId: OTHER_CARD_ID, firstSeenAt: LATER_REVEALED_AT },
     ]);
+  });
+
+  it("appends validated snapshots without rereading stateful records", () => {
+    const persistedRecord = {
+      cardId: CARD_ID,
+      firstSeenAt: FIRST_SEEN_AT,
+    } as const;
+    const privateRecordData = "PRIVATE_SECOND_ITERATION_RECORD";
+    let iterationCount = 0;
+    const records = {
+      [Symbol.iterator](): Iterator<DiscoveryRecord> {
+        iterationCount += 1;
+        const values =
+          iterationCount === 1
+            ? [persistedRecord]
+            : [
+                {
+                  cardId: CARD_ID,
+                  firstSeenAt: LATER_REVEALED_AT,
+                  privateRecordData,
+                },
+              ];
+        return values[Symbol.iterator]();
+      },
+    } as unknown as readonly DiscoveryRecord[];
+
+    const result = recordCardDiscovery(
+      records,
+      OTHER_CARD_ID,
+      LATER_REVEALED_AT,
+    );
+
+    expect(iterationCount).toBe(1);
+    expect(result).toEqual([
+      persistedRecord,
+      { cardId: OTHER_CARD_ID, firstSeenAt: LATER_REVEALED_AT },
+    ]);
+    expect(JSON.stringify(result)).not.toContain(privateRecordData);
+  });
+
+  it("does not reread a persisted-state iterator that traps after validation", () => {
+    const persistedRecord = {
+      cardId: CARD_ID,
+      firstSeenAt: FIRST_SEEN_AT,
+    } as const;
+    const privateRecordData = "PRIVATE_SECOND_ITERATION_TRAP";
+    let iterationCount = 0;
+    const records = {
+      [Symbol.iterator](): Iterator<DiscoveryRecord> {
+        iterationCount += 1;
+        if (iterationCount > 1) throw new Error(privateRecordData);
+        return [persistedRecord][Symbol.iterator]();
+      },
+    } as unknown as readonly DiscoveryRecord[];
+
+    const result = recordCardDiscovery(
+      records,
+      OTHER_CARD_ID,
+      LATER_REVEALED_AT,
+    );
+
+    expect(iterationCount).toBe(1);
+    expect(result).toEqual([
+      persistedRecord,
+      { cardId: OTHER_CARD_ID, firstSeenAt: LATER_REVEALED_AT },
+    ]);
+    expect(JSON.stringify(result)).not.toContain(privateRecordData);
   });
 
   it("rejects an invalid reveal time without leaking it", () => {
