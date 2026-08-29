@@ -10,6 +10,7 @@ import type {
   ReadingDraw,
   ThemeManifestRef,
 } from "@aura/contracts";
+import { CURRENT_READING_CONTENT_BUNDLE } from "@aura/content";
 import { DomainError, type DomainErrorField } from "./errors.js";
 import type { SingleCardReadingResult } from "./single-reading.js";
 import { assertSingleCardReadingResult } from "./single-reading.js";
@@ -17,6 +18,72 @@ import { assertSingleCardReadingResult } from "./single-reading.js";
 export interface LocalHistoryPresentationRefs {
   readonly themeRef?: ThemeManifestRef;
   readonly deckRef?: DeckManifestRef;
+}
+
+export function replayLocalHistoryEntry(
+  entry: LocalHistoryEntry,
+): SingleCardReadingResult {
+  let externalSession: object;
+  try {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      Array.isArray(entry) ||
+      !Object.hasOwn(entry, "session")
+    ) {
+      throw new Error("Invalid replay entry shell.");
+    }
+
+    const session = (entry as { readonly session: unknown }).session;
+    if (
+      typeof session !== "object" ||
+      session === null ||
+      Array.isArray(session)
+    ) {
+      throw new Error("Invalid replay session shell.");
+    }
+    externalSession = session;
+  } catch {
+    throw new DomainError("INVALID_HISTORY_ENTRY", "result");
+  }
+
+  let hasAllVersions: boolean;
+  try {
+    hasAllVersions =
+      Object.hasOwn(externalSession, "rulesVersion") &&
+      Object.hasOwn(externalSession, "contentVersion") &&
+      Object.hasOwn(entry, "textVersion");
+  } catch {
+    throw new DomainError("INVALID_HISTORY_ENTRY", "result");
+  }
+  if (!hasAllVersions) {
+    throw new DomainError("UNSUPPORTED_REPLAY_VERSION", "version");
+  }
+
+  let parsed: LocalHistoryEntry;
+  const safeField: DomainErrorField = "result";
+  try {
+    parsed = LocalHistoryEntrySchema.parse(entry);
+  } catch {
+    throw new DomainError("INVALID_HISTORY_ENTRY", safeField);
+  }
+
+  const storedResult = {
+    session: parsed.session,
+    narrative: parsed.narrative,
+    textVersion: parsed.textVersion,
+  };
+  const bundle = CURRENT_READING_CONTENT_BUNDLE;
+  if (
+    storedResult.session.rulesVersion !== bundle.rulesVersion ||
+    storedResult.session.contentVersion !== bundle.contentVersion ||
+    storedResult.textVersion !== bundle.textVersion
+  ) {
+    throw new DomainError("UNSUPPORTED_REPLAY_VERSION", "version");
+  }
+
+  assertSingleCardReadingResult(storedResult);
+  return storedResult;
 }
 
 export function createLocalHistoryEntry(
@@ -75,10 +142,17 @@ export function appendLocalHistoryEntry(
   history: readonly LocalHistoryEntry[],
   entry: LocalHistoryEntry,
 ): readonly LocalHistoryEntry[] {
+  let historySnapshot: readonly unknown[];
+  try {
+    historySnapshot = snapshotDenseStableHistory(history);
+  } catch {
+    throw new DomainError("INVALID_HISTORY_ENTRY", "history");
+  }
+
   let parsedHistory: LocalHistoryEntry[];
   try {
     parsedHistory = [];
-    for (const persistedEntry of history) {
+    for (const persistedEntry of historySnapshot) {
       parsedHistory.push(
         parseHistoryEntry(persistedEntry, { safeField: "history" }),
       );
@@ -117,6 +191,79 @@ export function appendLocalHistoryEntry(
   if (sameReadingResult(existing, parsedEntry)) return [...parsedHistory];
 
   throw new DomainError("HISTORY_SESSION_CONFLICT", "sessionId");
+}
+
+function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Invalid history collection.");
+  }
+
+  const initialLength = value.length;
+  const initialDescriptors: PropertyDescriptor[] = [];
+  for (let index = 0; index < initialLength; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined) {
+      throw new Error("Sparse history collection.");
+    }
+    initialDescriptors.push(descriptor);
+  }
+
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < initialLength; index += 1) {
+    if (
+      value.length !== initialLength ||
+      !samePropertyDescriptor(
+        Object.getOwnPropertyDescriptor(value, index),
+        initialDescriptors[index],
+      )
+    ) {
+      throw new Error("Unstable history collection.");
+    }
+
+    snapshot.push(value[index]);
+
+    if (
+      value.length !== initialLength ||
+      !samePropertyDescriptor(
+        Object.getOwnPropertyDescriptor(value, index),
+        initialDescriptors[index],
+      )
+    ) {
+      throw new Error("Unstable history collection.");
+    }
+  }
+
+  if (value.length !== initialLength) {
+    throw new Error("Unstable history collection.");
+  }
+  for (let index = 0; index < initialLength; index += 1) {
+    if (
+      !samePropertyDescriptor(
+        Object.getOwnPropertyDescriptor(value, index),
+        initialDescriptors[index],
+      )
+    ) {
+      throw new Error("Unstable history collection.");
+    }
+  }
+
+  return snapshot;
+}
+
+function samePropertyDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable &&
+    left.value === right.value &&
+    left.get === right.get &&
+    left.set === right.set
+  );
 }
 
 function parseHistoryEntry(

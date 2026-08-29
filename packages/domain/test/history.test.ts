@@ -444,6 +444,134 @@ describe("appendLocalHistoryEntry", () => {
     );
   });
 
+  it("ignores an empty overridden array iterator and preserves every entry", () => {
+    const first = saved();
+    const second = saved(reading({ sessionId: "history-session-002" }));
+    const incoming = saved(reading({ sessionId: "history-session-003" }));
+    const history = [first, second];
+    let iteratorCalls = 0;
+    Object.defineProperty(history, Symbol.iterator, {
+      configurable: true,
+      value(): Iterator<LocalHistoryEntry> {
+        iteratorCalls += 1;
+        return [][Symbol.iterator]();
+      },
+    });
+
+    const appended = appendLocalHistoryEntry(history, incoming);
+
+    expect(appended).toEqual([first, second, incoming]);
+    expect(iteratorCalls).toBe(0);
+  });
+
+  it("does not let a partial overridden iterator hide corrupt or duplicate entries", () => {
+    const first = saved();
+    const corruptSentinel = "PRIVATE_HIDDEN_CORRUPT_HISTORY";
+    const corrupt = {
+      ...saved(reading({ sessionId: "history-session-002" })),
+      savedAt: corruptSentinel,
+    } as LocalHistoryEntry;
+    const histories = [
+      [first, corrupt],
+      [first, saved(reading(), "2026-08-30T00:00:00.000Z")],
+    ];
+    for (const history of histories) {
+      Object.defineProperty(history, Symbol.iterator, {
+        configurable: true,
+        value(): Iterator<LocalHistoryEntry> {
+          return [first][Symbol.iterator]();
+        },
+      });
+    }
+
+    for (const history of histories) {
+      expectHistoryError(
+        () =>
+          appendLocalHistoryEntry(
+            history,
+            saved(reading({ sessionId: "history-session-003" })),
+          ),
+        "INVALID_HISTORY_ENTRY",
+        "history",
+        [corruptSentinel, SESSION_ID],
+      );
+    }
+  });
+
+  it("rejects sparse persisted arrays with a fixed history error", () => {
+    const sparse = new Array<LocalHistoryEntry>(2);
+    sparse[0] = saved();
+
+    expectHistoryError(
+      () =>
+        appendLocalHistoryEntry(
+          sparse,
+          saved(reading({ sessionId: "history-session-003" })),
+        ),
+      "INVALID_HISTORY_ENTRY",
+      "history",
+    );
+  });
+
+  it("rejects an indexed getter that shortens persisted history", () => {
+    const hiddenSentinel = "PRIVATE_SHORTENED_HISTORY";
+    const history = [
+      saved(),
+      {
+        ...saved(reading({ sessionId: "history-session-002" })),
+        savedAt: hiddenSentinel,
+      } as LocalHistoryEntry,
+    ];
+    const first = history[0]!;
+    Object.defineProperty(history, 0, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        history.length = 1;
+        return first;
+      },
+    });
+
+    expectHistoryError(
+      () =>
+        appendLocalHistoryEntry(
+          history,
+          saved(reading({ sessionId: "history-session-003" })),
+        ),
+      "INVALID_HISTORY_ENTRY",
+      "history",
+      [hiddenSentinel],
+    );
+  });
+
+  it("rejects indexed shape changes during the persisted snapshot", () => {
+    const originalSecond = saved(reading({ sessionId: "history-session-002" }));
+    const replacementSentinel = "PRIVATE_REPLACED_HISTORY_SESSION";
+    const replacement = saved(reading({ sessionId: replacementSentinel }));
+    const history = [saved(), originalSecond];
+    const first = history[0]!;
+    Object.defineProperty(history, 0, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        delete history[1];
+        history[1] = replacement;
+        return first;
+      },
+    });
+
+    expectHistoryError(
+      () =>
+        appendLocalHistoryEntry(
+          history,
+          saved(reading({ sessionId: "history-session-003" })),
+        ),
+      "INVALID_HISTORY_ENTRY",
+      "history",
+      [replacementSentinel],
+    );
+  });
+
   it("snapshots a stateful incoming saved time before schema validation", () => {
     const sentinel = "PRIVATE_INCOMING_SECOND_SAVED_AT_READ";
     let savedAtReads = 0;
