@@ -11,7 +11,6 @@ const MAX_DISCOVERY_RECORDS = 78;
 const isArray = Array.isArray;
 const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const defineProperty = Object.defineProperty;
-const objectKeys = Object.keys;
 const hasOwn = Object.hasOwn;
 const isSafeInteger = Number.isSafeInteger;
 const managedArrayPrototype = Array.prototype;
@@ -106,21 +105,25 @@ function snapshotDiscoveryRecord(value: unknown): {
     readonly cardId: unknown;
     readonly firstSeenAt: unknown;
   };
-  const cardId = externalRecord.cardId;
-  const firstSeenAt = externalRecord.firstSeenAt;
-  const keys = objectKeys(value);
-  if (
-    keys.length !== 2 ||
-    !hasOwn(value, "cardId") ||
-    !hasOwn(value, "firstSeenAt")
-  ) {
+  const cardIdDescriptor = getOwnPropertyDescriptor(value, "cardId");
+  const firstSeenAtDescriptor = getOwnPropertyDescriptor(value, "firstSeenAt");
+  if (cardIdDescriptor === undefined || firstSeenAtDescriptor === undefined) {
     throw new Error("Invalid discovery record keys.");
   }
-  for (let index = 0; index < keys.length; index += 1) {
-    const key = keys[index];
-    if (key !== "cardId" && key !== "firstSeenAt") {
-      throw new Error("Invalid discovery record key.");
-    }
+
+  const cardId = externalRecord.cardId;
+  const firstSeenAt = externalRecord.firstSeenAt;
+  if (
+    !samePropertyDescriptor(
+      getOwnPropertyDescriptor(value, "cardId"),
+      cardIdDescriptor,
+    ) ||
+    !samePropertyDescriptor(
+      getOwnPropertyDescriptor(value, "firstSeenAt"),
+      firstSeenAtDescriptor,
+    )
+  ) {
+    throw new Error("Unstable discovery record.");
   }
   return { cardId, firstSeenAt };
 }
