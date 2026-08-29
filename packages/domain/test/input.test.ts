@@ -81,6 +81,55 @@ describe("parseSingleReadingInput", () => {
     expect(() => parseSingleReadingInput(candidate)).toThrow(DomainError);
   });
 
+  it("sanitizes DomainError instances thrown by hostile input accessors", () => {
+    const sentinel = "PRIVATE_ACCESSOR_SENTINEL";
+    const hostile = new Proxy(
+      { ...validInput },
+      {
+        get(target, property, receiver) {
+          if (property === "seed") {
+            const error = new DomainError("UNKNOWN_CARD_CONTENT", "cardId");
+            error.message = sentinel;
+            Object.assign(error, { cause: sentinel });
+            throw error;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    try {
+      parseSingleReadingInput(hostile);
+      throw new Error("Expected hostile input to throw.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      expect(String(error)).toBe("DomainError: The reading input is invalid.");
+      expect(Object.keys(error)).toEqual(["code", "field"]);
+      expect(JSON.stringify(error)).toBe(
+        JSON.stringify({ code: "INVALID_READING_INPUT", field: "input" }),
+      );
+      expect("cause" in (error as DomainError)).toBe(false);
+      expect(JSON.stringify(error)).not.toContain(sentinel);
+      expect(String(error)).not.toContain(sentinel);
+    }
+  });
+
+  it("rejects non-enumerable unknown input keys", () => {
+    const candidate = { ...validInput };
+    Object.defineProperty(candidate, "rawQuestion", {
+      value: "PRIVATE_QUESTION_SENTINEL",
+      enumerable: false,
+    });
+
+    expect(() => parseSingleReadingInput(candidate)).toThrow(DomainError);
+  });
+
+  it("rejects required values inherited from a prototype", () => {
+    const candidate = Object.create(validInput) as Record<string, unknown>;
+
+    expect(() => parseSingleReadingInput(candidate)).toThrow(DomainError);
+  });
+
   it("redacts invalid input details from its error envelope", () => {
     const sentinel = "PRIVATE_QUESTION_SENTINEL";
 

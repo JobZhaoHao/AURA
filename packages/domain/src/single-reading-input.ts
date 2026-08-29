@@ -24,6 +24,10 @@ const SINGLE_READING_INPUT_KEYS = [
 ] as const;
 const OPAQUE_INPUT_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
+class InvalidReadingInputFailure {
+  constructor(readonly field: DomainErrorField) {}
+}
+
 type SingleReadingInputFields = {
   seed: string;
   sessionId: string;
@@ -46,7 +50,7 @@ export type SingleReadingInput = Readonly<{
 export function parseSingleReadingInput(value: unknown): SingleReadingInput {
   try {
     if (!isExactInputObject(value)) {
-      throw new DomainError("INVALID_READING_INPUT", "input");
+      throw new InvalidReadingInputFailure("input");
     }
 
     const fields = validateSingleReadingInputFields(value);
@@ -57,35 +61,38 @@ export function parseSingleReadingInput(value: unknown): SingleReadingInput {
     });
     return Object.freeze(parsed);
   } catch (error) {
-    if (error instanceof DomainError) throw error;
-    throw new DomainError("INVALID_READING_INPUT", "input");
+    throw toSafeInputDomainError(error);
   }
 }
 
 function assertParsedSingleReadingInput(
   value: unknown,
 ): asserts value is SingleReadingInput {
-  if (!isExactInputObject(value, true) || !Object.isFrozen(value)) {
-    throw new DomainError("INVALID_READING_INPUT", "input");
-  }
+  try {
+    if (!isExactInputObject(value, true) || !Object.isFrozen(value)) {
+      throw new InvalidReadingInputFailure("input");
+    }
 
-  const symbols = Object.getOwnPropertySymbols(value);
-  const brand = Object.getOwnPropertyDescriptor(
-    value,
-    parsedSingleReadingInput,
-  );
-  if (
-    symbols.length !== 1 ||
-    symbols[0] !== parsedSingleReadingInput ||
-    brand?.value !== true ||
-    brand.enumerable ||
-    brand.configurable ||
-    brand.writable
-  ) {
-    throw new DomainError("INVALID_READING_INPUT", "input");
-  }
+    const symbols = Object.getOwnPropertySymbols(value);
+    const brand = Object.getOwnPropertyDescriptor(
+      value,
+      parsedSingleReadingInput,
+    );
+    if (
+      symbols.length !== 1 ||
+      symbols[0] !== parsedSingleReadingInput ||
+      brand?.value !== true ||
+      brand.enumerable ||
+      brand.configurable ||
+      brand.writable
+    ) {
+      throw new InvalidReadingInputFailure("input");
+    }
 
-  validateSingleReadingInputFields(value);
+    validateSingleReadingInputFields(value);
+  } catch (error) {
+    throw toSafeInputDomainError(error);
+  }
 }
 
 function isExactInputObject(
@@ -103,7 +110,7 @@ function isExactInputObject(
     return false;
   }
 
-  const keys = Object.keys(value);
+  const keys = Object.getOwnPropertyNames(value);
   return (
     keys.length === SINGLE_READING_INPUT_KEYS.length &&
     keys.every((key) =>
@@ -133,7 +140,7 @@ function validateSingleReadingInputFields(
     "safetyDisposition",
   );
   if (typeof value.reversalsEnabled !== "boolean") {
-    throw new DomainError("INVALID_READING_INPUT", "reversalsEnabled");
+    throw new InvalidReadingInputFailure("reversalsEnabled");
   }
   const createdAt = parseSchemaField(
     value.createdAt,
@@ -153,7 +160,7 @@ function validateSingleReadingInputFields(
 
 function parseOpaqueField(value: unknown, field: DomainErrorField): string {
   if (typeof value !== "string" || !OPAQUE_INPUT_PATTERN.test(value)) {
-    throw new DomainError("INVALID_READING_INPUT", field);
+    throw new InvalidReadingInputFailure(field);
   }
   return value;
 }
@@ -166,6 +173,37 @@ function parseSchemaField<T>(
   try {
     return schema.parse(value);
   } catch {
-    throw new DomainError("INVALID_READING_INPUT", field);
+    throw new InvalidReadingInputFailure(field);
   }
+}
+
+function toSafeInputDomainError(error: unknown): DomainError {
+  if (
+    error instanceof InvalidReadingInputFailure &&
+    isDomainErrorField(error.field)
+  ) {
+    return new DomainError("INVALID_READING_INPUT", error.field);
+  }
+  return new DomainError("INVALID_READING_INPUT", "input");
+}
+
+function isDomainErrorField(value: unknown): value is DomainErrorField {
+  return [
+    "input",
+    "seed",
+    "sessionId",
+    "questionCategory",
+    "safetyDisposition",
+    "reversalsEnabled",
+    "createdAt",
+    "cardId",
+    "revealedAt",
+    "discovery",
+    "result",
+    "savedAt",
+    "history",
+    "themeRef",
+    "deckRef",
+    "version",
+  ].includes(value as DomainErrorField);
 }
