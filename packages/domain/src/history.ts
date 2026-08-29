@@ -133,28 +133,59 @@ function parseHistoryEntry(
     throw new Error("Invalid history entry shell.");
   }
 
-  const candidate = value as {
+  const keys = Object.keys(value);
+  const allowedKeys = new Set([
+    "session",
+    "narrative",
+    "textVersion",
+    "savedAt",
+    "themeRef",
+    "deckRef",
+  ]);
+  if (keys.some((key) => !allowedKeys.has(key))) {
+    throw new Error("Invalid history entry key.");
+  }
+
+  const externalEntry = value as {
+    readonly session: unknown;
+    readonly narrative: unknown;
+    readonly textVersion: unknown;
     readonly savedAt: unknown;
     readonly themeRef?: unknown;
     readonly deckRef?: unknown;
   };
+
+  const session = externalEntry.session;
+  const narrative = externalEntry.narrative;
+  const textVersion = externalEntry.textVersion;
+
   context.safeField = "savedAt";
+  const savedAt = externalEntry.savedAt;
   LocalHistoryEntrySchema.pick({ savedAt: true }).parse({
-    savedAt: candidate.savedAt,
+    savedAt,
   });
 
   context.safeField = "themeRef";
-  if (candidate.themeRef !== undefined) {
-    ThemeManifestRefSchema.parse(candidate.themeRef);
+  const themeRef = externalEntry.themeRef;
+  if (themeRef !== undefined) {
+    ThemeManifestRefSchema.parse(themeRef);
   }
 
   context.safeField = "deckRef";
-  if (candidate.deckRef !== undefined) {
-    DeckManifestRefSchema.parse(candidate.deckRef);
+  const deckRef = externalEntry.deckRef;
+  if (deckRef !== undefined) {
+    DeckManifestRefSchema.parse(deckRef);
   }
 
   context.safeField = "result";
-  const parsedEntry = LocalHistoryEntrySchema.parse(value);
+  const parsedEntry = LocalHistoryEntrySchema.parse({
+    session,
+    narrative,
+    textVersion,
+    savedAt,
+    ...(themeRef === undefined ? {} : { themeRef }),
+    ...(deckRef === undefined ? {} : { deckRef }),
+  });
   assertEntryReadingResult(parsedEntry);
   return parsedEntry;
 }

@@ -409,4 +409,60 @@ describe("appendLocalHistoryEntry", () => {
       [proxySentinel],
     );
   });
+
+  it("snapshots a stateful incoming saved time before schema validation", () => {
+    const sentinel = "PRIVATE_INCOMING_SECOND_SAVED_AT_READ";
+    let savedAtReads = 0;
+    const statefulIncoming = new Proxy(saved(), {
+      get(target, property, receiver) {
+        if (property === "savedAt" && ++savedAtReads > 1) {
+          throw new Error(sentinel);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    }) as LocalHistoryEntry;
+
+    expect(appendLocalHistoryEntry([], statefulIncoming)).toEqual([saved()]);
+    expect(savedAtReads).toBe(1);
+  });
+
+  it("snapshots a stateful persisted saved time before schema validation", () => {
+    const sentinel = "PRIVATE_HISTORY_SECOND_SAVED_AT_READ";
+    let savedAtReads = 0;
+    const statefulPersisted = new Proxy(saved(), {
+      get(target, property, receiver) {
+        if (property === "savedAt" && ++savedAtReads > 1) {
+          throw new Error(sentinel);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    }) as LocalHistoryEntry;
+
+    expect(
+      appendLocalHistoryEntry(
+        [statefulPersisted],
+        saved(reading({ sessionId: "history-session-002" })),
+      ),
+    ).toHaveLength(2);
+    expect(savedAtReads).toBe(1);
+  });
+
+  it.each(["themeRef", "deckRef"] as const)(
+    "reads optional %s only once before schema validation",
+    (property) => {
+      const sentinel = `PRIVATE_SECOND_${property}_READ`;
+      let metadataReads = 0;
+      const statefulIncoming = new Proxy(saved(), {
+        get(target, accessedProperty, receiver) {
+          if (accessedProperty === property && ++metadataReads > 1) {
+            throw new Error(sentinel);
+          }
+          return Reflect.get(target, accessedProperty, receiver);
+        },
+      }) as LocalHistoryEntry;
+
+      expect(appendLocalHistoryEntry([], statefulIncoming)).toHaveLength(1);
+      expect(metadataReads).toBe(1);
+    },
+  );
 });
