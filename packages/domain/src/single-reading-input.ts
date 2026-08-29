@@ -64,7 +64,7 @@ export function parseSingleReadingInput(value: unknown): SingleReadingInput {
   }
 }
 
-function assertParsedSingleReadingInput(
+export function assertParsedSingleReadingInput(
   value: unknown,
 ): asserts value is SingleReadingInput {
   let safeField: DomainErrorField = "input";
