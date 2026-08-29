@@ -133,6 +133,34 @@ function parseHistoryEntry(
     throw new Error("Invalid history entry shell.");
   }
 
+  const externalEntry = value as {
+    readonly session: unknown;
+    readonly narrative: unknown;
+    readonly textVersion: unknown;
+    readonly savedAt: unknown;
+    readonly themeRef?: unknown;
+    readonly deckRef?: unknown;
+  };
+
+  context.safeField = "savedAt";
+  const savedAt = externalEntry.savedAt;
+  LocalHistoryEntrySchema.pick({ savedAt: true }).parse({
+    savedAt,
+  });
+
+  context.safeField = "themeRef";
+  const hasThemeRef = Object.hasOwn(value, "themeRef");
+  const themeRef = hasThemeRef ? externalEntry.themeRef : undefined;
+  const parsedThemeRef =
+    themeRef === undefined ? undefined : ThemeManifestRefSchema.parse(themeRef);
+
+  context.safeField = "deckRef";
+  const hasDeckRef = Object.hasOwn(value, "deckRef");
+  const deckRef = hasDeckRef ? externalEntry.deckRef : undefined;
+  const parsedDeckRef =
+    deckRef === undefined ? undefined : DeckManifestRefSchema.parse(deckRef);
+
+  context.safeField = "result";
   const keys = Object.keys(value);
   const allowedKeys = new Set([
     "session",
@@ -146,45 +174,17 @@ function parseHistoryEntry(
     throw new Error("Invalid history entry key.");
   }
 
-  const externalEntry = value as {
-    readonly session: unknown;
-    readonly narrative: unknown;
-    readonly textVersion: unknown;
-    readonly savedAt: unknown;
-    readonly themeRef?: unknown;
-    readonly deckRef?: unknown;
-  };
-
   const session = externalEntry.session;
   const narrative = externalEntry.narrative;
   const textVersion = externalEntry.textVersion;
 
-  context.safeField = "savedAt";
-  const savedAt = externalEntry.savedAt;
-  LocalHistoryEntrySchema.pick({ savedAt: true }).parse({
-    savedAt,
-  });
-
-  context.safeField = "themeRef";
-  const themeRef = externalEntry.themeRef;
-  if (themeRef !== undefined) {
-    ThemeManifestRefSchema.parse(themeRef);
-  }
-
-  context.safeField = "deckRef";
-  const deckRef = externalEntry.deckRef;
-  if (deckRef !== undefined) {
-    DeckManifestRefSchema.parse(deckRef);
-  }
-
-  context.safeField = "result";
   const parsedEntry = LocalHistoryEntrySchema.parse({
     session,
     narrative,
     textVersion,
     savedAt,
-    ...(themeRef === undefined ? {} : { themeRef }),
-    ...(deckRef === undefined ? {} : { deckRef }),
+    ...(hasThemeRef ? { themeRef: parsedThemeRef } : {}),
+    ...(hasDeckRef ? { deckRef: parsedDeckRef } : {}),
   });
   assertEntryReadingResult(parsedEntry);
   return parsedEntry;

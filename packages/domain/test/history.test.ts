@@ -465,4 +465,88 @@ describe("appendLocalHistoryEntry", () => {
       expect(metadataReads).toBe(1);
     },
   );
+
+  it.each(["themeRef", "deckRef"] as const)(
+    "reuses a parsed nested %s instead of rereading its Proxy",
+    (property) => {
+      const sentinel = `PRIVATE_NESTED_${property}_SECOND_READ`;
+      const reads = new Map<PropertyKey, number>();
+      const nestedRef = new Proxy(
+        property === "themeRef" ? THEME_REF : DECK_REF,
+        {
+          get(target, accessedProperty, receiver) {
+            if (
+              accessedProperty === "themeId" ||
+              accessedProperty === "deckId" ||
+              accessedProperty === "version"
+            ) {
+              const count = (reads.get(accessedProperty) ?? 0) + 1;
+              reads.set(accessedProperty, count);
+              if (count > 1) throw new Error(sentinel);
+            }
+            return Reflect.get(target, accessedProperty, receiver);
+          },
+        },
+      );
+      const entry = {
+        ...saved(),
+        [property]: nestedRef,
+      } as LocalHistoryEntry;
+
+      expect(appendLocalHistoryEntry([], entry)).toHaveLength(1);
+    },
+  );
+
+  it.each(["themeRef", "deckRef"] as const)(
+    "preserves an explicit undefined own %s key",
+    (property) => {
+      const entry = { ...saved(), [property]: undefined } as LocalHistoryEntry;
+
+      const appended = appendLocalHistoryEntry([], entry);
+
+      expect(Object.hasOwn(appended[0]!, property)).toBe(true);
+      expect(appended[0]).toHaveProperty(property, undefined);
+    },
+  );
+
+  it("prioritizes invalid metadata over an unknown entry key", () => {
+    const invalidSavedAt = "PRIVATE_PRIORITY_SAVED_AT";
+    const unknownKey = "PRIVATE_UNKNOWN_HISTORY_KEY";
+    const entry = {
+      ...saved(),
+      savedAt: invalidSavedAt,
+      [unknownKey]: true,
+    } as LocalHistoryEntry;
+
+    expectHistoryError(
+      () => appendLocalHistoryEntry([], entry),
+      "INVALID_HISTORY_ENTRY",
+      "savedAt",
+      [invalidSavedAt, unknownKey],
+    );
+  });
+
+  it("prioritizes invalid metadata over a hostile result getter", () => {
+    const invalidThemeId = "PRIVATE_PRIORITY_THEME";
+    const resultSentinel = "PRIVATE_PRIORITY_RESULT";
+    const hostileEntry = new Proxy(
+      {
+        ...saved(),
+        themeRef: { themeId: invalidThemeId, version: "m1-theme-v1" },
+      },
+      {
+        get(target, property, receiver) {
+          if (property === "session") throw new Error(resultSentinel);
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    ) as LocalHistoryEntry;
+
+    expectHistoryError(
+      () => appendLocalHistoryEntry([], hostileEntry),
+      "INVALID_HISTORY_ENTRY",
+      "themeRef",
+      [invalidThemeId, resultSentinel],
+    );
+  });
 });
