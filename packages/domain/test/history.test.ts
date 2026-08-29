@@ -204,6 +204,40 @@ describe("createLocalHistoryEntry", () => {
       [sentinel],
     );
   });
+
+  it.each([
+    ["themeRef", THEME_REF],
+    ["deckRef", DECK_REF],
+  ] as const)(
+    "snapshots a stateful root refs %s before schema parsing",
+    (property, validRef) => {
+      const sentinel = `PRIVATE_CREATE_SECOND_${property}_READ`;
+      let metadataReads = 0;
+      const refs = new Proxy(
+        property === "themeRef"
+          ? { themeRef: validRef }
+          : { deckRef: validRef },
+        {
+          get(target, accessedProperty, receiver) {
+            if (accessedProperty === property && ++metadataReads > 1) {
+              throw new Error(sentinel);
+            }
+            return Reflect.get(target, accessedProperty, receiver);
+          },
+        },
+      ) as {
+        readonly themeRef?: ThemeManifestRef;
+        readonly deckRef?: DeckManifestRef;
+      };
+
+      expect(createLocalHistoryEntry(reading(), SAVED_AT, refs)).toEqual({
+        ...reading(),
+        savedAt: SAVED_AT,
+        [property]: validRef,
+      });
+      expect(metadataReads).toBe(1);
+    },
+  );
 });
 
 describe("appendLocalHistoryEntry", () => {

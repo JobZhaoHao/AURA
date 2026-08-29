@@ -46,13 +46,15 @@ export function createLocalHistoryEntry(
       }
 
       safeField = "themeRef";
-      if (refs.themeRef !== undefined) {
-        themeRef = ThemeManifestRefSchema.parse(refs.themeRef);
+      const externalThemeRef = refs.themeRef;
+      if (externalThemeRef !== undefined) {
+        themeRef = ThemeManifestRefSchema.parse(externalThemeRef);
       }
 
       safeField = "deckRef";
-      if (refs.deckRef !== undefined) {
-        deckRef = DeckManifestRefSchema.parse(refs.deckRef);
+      const externalDeckRef = refs.deckRef;
+      if (externalDeckRef !== undefined) {
+        deckRef = DeckManifestRefSchema.parse(externalDeckRef);
       }
     }
 
