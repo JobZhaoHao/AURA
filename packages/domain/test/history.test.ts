@@ -572,31 +572,63 @@ describe("appendLocalHistoryEntry", () => {
     );
   });
 
-  it("does not consult a prototype iterator installed by an indexed getter", () => {
-    const originalIteratorDescriptor = Object.getOwnPropertyDescriptor(
-      Array.prototype,
+  it("restores captured array intrinsics after an indexed getter rebinds globals", () => {
+    const safeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    const safeDefineProperty = Object.defineProperty;
+    const originalArrayConstructor = globalThis.Array;
+    const originalArrayPrototype = originalArrayConstructor.prototype;
+    const originalGlobalArrayDescriptor = safeGetOwnPropertyDescriptor(
+      globalThis,
+      "Array",
+    )!;
+    const originalIteratorDescriptor = safeGetOwnPropertyDescriptor(
+      originalArrayPrototype,
       Symbol.iterator,
+    )!;
+    const originalGetOwnPropertyDescriptorDescriptor =
+      safeGetOwnPropertyDescriptor(Object, "getOwnPropertyDescriptor")!;
+    const originalDefinePropertyDescriptor = safeGetOwnPropertyDescriptor(
+      Object,
+      "defineProperty",
     )!;
     const originalIterator =
       originalIteratorDescriptor.value as () => Iterator<unknown>;
+    const intrinsicSentinel = "PRIVATE_REBOUND_ARRAY_INTRINSIC";
     const first = saved();
     const incoming = saved(reading({ sessionId: "history-session-003" }));
     const history = [first];
     let iteratorCalls = 0;
-    Object.defineProperty(history, 0, {
+    safeDefineProperty(history, 0, {
       configurable: true,
       enumerable: true,
       get() {
-        Object.defineProperty(Array.prototype, Symbol.iterator, {
+        safeDefineProperty(originalArrayPrototype, Symbol.iterator, {
           ...originalIteratorDescriptor,
           value(): Iterator<unknown> {
             iteratorCalls += 1;
-            Object.defineProperty(
-              Array.prototype,
+            safeDefineProperty(
+              originalArrayPrototype,
               Symbol.iterator,
               originalIteratorDescriptor,
             );
             return originalIterator.call([]);
+          },
+        });
+        function ReplacementArray(): void {}
+        safeDefineProperty(globalThis, "Array", {
+          ...originalGlobalArrayDescriptor,
+          value: ReplacementArray,
+        });
+        safeDefineProperty(Object, "getOwnPropertyDescriptor", {
+          ...originalGetOwnPropertyDescriptorDescriptor,
+          value() {
+            throw new Error(intrinsicSentinel);
+          },
+        });
+        safeDefineProperty(Object, "defineProperty", {
+          ...originalDefinePropertyDescriptor,
+          value() {
+            throw new Error(intrinsicSentinel);
           },
         });
         return first;
@@ -607,15 +639,36 @@ describe("appendLocalHistoryEntry", () => {
     try {
       appended = appendLocalHistoryEntry(history, incoming);
     } finally {
-      Object.defineProperty(
-        Array.prototype,
+      safeDefineProperty(
+        originalArrayPrototype,
         Symbol.iterator,
         originalIteratorDescriptor,
       );
+      safeDefineProperty(
+        Object,
+        "getOwnPropertyDescriptor",
+        originalGetOwnPropertyDescriptorDescriptor,
+      );
+      safeDefineProperty(
+        Object,
+        "defineProperty",
+        originalDefinePropertyDescriptor,
+      );
+      safeDefineProperty(globalThis, "Array", originalGlobalArrayDescriptor);
     }
 
     expect(appended).toEqual([first, incoming]);
     expect(iteratorCalls).toBe(0);
+    expect(globalThis.Array).toBe(originalArrayConstructor);
+    expect(
+      safeGetOwnPropertyDescriptor(originalArrayPrototype, Symbol.iterator),
+    ).toEqual(originalIteratorDescriptor);
+    expect(
+      safeGetOwnPropertyDescriptor(Object, "getOwnPropertyDescriptor"),
+    ).toEqual(originalGetOwnPropertyDescriptorDescriptor);
+    expect(safeGetOwnPropertyDescriptor(Object, "defineProperty")).toEqual(
+      originalDefinePropertyDescriptor,
+    );
   });
 
   it.each([

@@ -22,6 +22,18 @@ export interface LocalHistoryPresentationRefs {
 
 const MAX_LOCAL_HISTORY_ENTRIES = 10_000;
 
+interface ArrayIntrinsicSnapshot {
+  readonly arrayPrototype: object;
+  readonly globalArrayDescriptor: PropertyDescriptor;
+  readonly iteratorDescriptor: PropertyDescriptor | undefined;
+  readonly objectConstructor: ObjectConstructor;
+  readonly getOwnPropertyDescriptorDescriptor: PropertyDescriptor;
+  readonly definePropertyDescriptor: PropertyDescriptor;
+  readonly getOwnPropertyDescriptor: typeof Object.getOwnPropertyDescriptor;
+  readonly defineProperty: typeof Object.defineProperty;
+  readonly deleteProperty: typeof Reflect.deleteProperty;
+}
+
 export function replayLocalHistoryEntry(
   entry: LocalHistoryEntry,
 ): SingleCardReadingResult {
@@ -144,21 +156,23 @@ export function appendLocalHistoryEntry(
   history: readonly LocalHistoryEntry[],
   entry: LocalHistoryEntry,
 ): readonly LocalHistoryEntry[] {
-  let initialArrayIteratorDescriptor: PropertyDescriptor | undefined;
+  let intrinsicSnapshot: ArrayIntrinsicSnapshot | undefined;
   let historySnapshot: readonly unknown[];
   try {
-    initialArrayIteratorDescriptor = Object.getOwnPropertyDescriptor(
-      Array.prototype,
-      Symbol.iterator,
+    intrinsicSnapshot = captureArrayIntrinsics();
+    historySnapshot = snapshotDenseStableHistory(
+      history,
+      intrinsicSnapshot.getOwnPropertyDescriptor,
     );
-    historySnapshot = snapshotDenseStableHistory(history);
-    restoreArrayIterator(initialArrayIteratorDescriptor);
+    restoreArrayIntrinsics(intrinsicSnapshot);
   } catch {
     try {
-      restoreArrayIterator(initialArrayIteratorDescriptor);
+      if (intrinsicSnapshot !== undefined) {
+        restoreArrayIntrinsics(intrinsicSnapshot);
+      }
     } catch {
       // The public error below remains fixed even if the hostile mutation
-      // made the global iterator impossible to restore.
+      // made the captured global intrinsics impossible to restore.
     }
     throw new DomainError("INVALID_HISTORY_ENTRY", "history");
   }
@@ -232,30 +246,100 @@ function copyHistoryWithEntry(
   return copied;
 }
 
-function restoreArrayIterator(
+function captureArrayIntrinsics(): ArrayIntrinsicSnapshot {
+  const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const defineProperty = Object.defineProperty;
+  const deleteProperty = Reflect.deleteProperty;
+  const arrayConstructor = globalThis.Array;
+  const arrayPrototype = arrayConstructor.prototype;
+  const globalArrayDescriptor = getOwnPropertyDescriptor(globalThis, "Array");
+  const objectConstructor = Object;
+  const getOwnPropertyDescriptorDescriptor = getOwnPropertyDescriptor(
+    objectConstructor,
+    "getOwnPropertyDescriptor",
+  );
+  const definePropertyDescriptor = getOwnPropertyDescriptor(
+    objectConstructor,
+    "defineProperty",
+  );
+  if (
+    globalArrayDescriptor === undefined ||
+    getOwnPropertyDescriptorDescriptor === undefined ||
+    definePropertyDescriptor === undefined
+  ) {
+    throw new Error("Missing array intrinsic descriptor.");
+  }
+
+  return {
+    arrayPrototype,
+    globalArrayDescriptor,
+    iteratorDescriptor: getOwnPropertyDescriptor(
+      arrayPrototype,
+      Symbol.iterator,
+    ),
+    objectConstructor,
+    getOwnPropertyDescriptorDescriptor,
+    definePropertyDescriptor,
+    getOwnPropertyDescriptor,
+    defineProperty,
+    deleteProperty,
+  };
+}
+
+function restoreArrayIntrinsics(snapshot: ArrayIntrinsicSnapshot): void {
+  restoreProperty(
+    snapshot,
+    snapshot.objectConstructor,
+    "getOwnPropertyDescriptor",
+    snapshot.getOwnPropertyDescriptorDescriptor,
+  );
+  restoreProperty(
+    snapshot,
+    snapshot.objectConstructor,
+    "defineProperty",
+    snapshot.definePropertyDescriptor,
+  );
+  restoreProperty(
+    snapshot,
+    snapshot.arrayPrototype,
+    Symbol.iterator,
+    snapshot.iteratorDescriptor,
+  );
+  restoreProperty(
+    snapshot,
+    globalThis,
+    "Array",
+    snapshot.globalArrayDescriptor,
+  );
+}
+
+function restoreProperty(
+  snapshot: ArrayIntrinsicSnapshot,
+  target: object,
+  property: PropertyKey,
   initialDescriptor: PropertyDescriptor | undefined,
 ): void {
-  const currentDescriptor = Object.getOwnPropertyDescriptor(
-    Array.prototype,
-    Symbol.iterator,
-  );
+  const currentDescriptor = snapshot.getOwnPropertyDescriptor(target, property);
   if (samePropertyDescriptor(currentDescriptor, initialDescriptor)) return;
 
   if (initialDescriptor === undefined) {
-    if (!Reflect.deleteProperty(Array.prototype, Symbol.iterator)) {
-      throw new Error("Unable to restore array iterator.");
+    if (!snapshot.deleteProperty(target, property)) {
+      throw new Error("Unable to restore intrinsic property.");
     }
     return;
   }
-  Object.defineProperty(Array.prototype, Symbol.iterator, initialDescriptor);
+  snapshot.defineProperty(target, property, initialDescriptor);
 }
 
-function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
+function snapshotDenseStableHistory(
+  value: unknown,
+  getOwnPropertyDescriptor: typeof Object.getOwnPropertyDescriptor,
+): readonly unknown[] {
   if (!Array.isArray(value)) {
     throw new Error("Invalid history collection.");
   }
 
-  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  const lengthDescriptor = getOwnPropertyDescriptor(value, "length");
   if (
     lengthDescriptor === undefined ||
     lengthDescriptor.configurable !== false ||
@@ -283,22 +367,34 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
 
   const initialDescriptors: PropertyDescriptor[] = [];
   for (let index = 0; index < initialLength; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    const descriptor = getOwnPropertyDescriptor(value, index);
     if (descriptor === undefined) {
       throw new Error("Sparse history collection.");
     }
     initialDescriptors[index] = descriptor;
   }
-  if (!hasStableArrayLength(value, lengthDescriptor, initialLength)) {
+  if (
+    !hasStableArrayLength(
+      value,
+      lengthDescriptor,
+      initialLength,
+      getOwnPropertyDescriptor,
+    )
+  ) {
     throw new Error("Unstable history collection.");
   }
 
   const snapshot: unknown[] = [];
   for (let index = 0; index < initialLength; index += 1) {
     if (
-      !hasStableArrayLength(value, lengthDescriptor, initialLength) ||
+      !hasStableArrayLength(
+        value,
+        lengthDescriptor,
+        initialLength,
+        getOwnPropertyDescriptor,
+      ) ||
       !samePropertyDescriptor(
-        Object.getOwnPropertyDescriptor(value, index),
+        getOwnPropertyDescriptor(value, index),
         initialDescriptors[index],
       )
     ) {
@@ -308,9 +404,14 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
     snapshot[index] = value[index];
 
     if (
-      !hasStableArrayLength(value, lengthDescriptor, initialLength) ||
+      !hasStableArrayLength(
+        value,
+        lengthDescriptor,
+        initialLength,
+        getOwnPropertyDescriptor,
+      ) ||
       !samePropertyDescriptor(
-        Object.getOwnPropertyDescriptor(value, index),
+        getOwnPropertyDescriptor(value, index),
         initialDescriptors[index],
       )
     ) {
@@ -318,13 +419,20 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
     }
   }
 
-  if (!hasStableArrayLength(value, lengthDescriptor, initialLength)) {
+  if (
+    !hasStableArrayLength(
+      value,
+      lengthDescriptor,
+      initialLength,
+      getOwnPropertyDescriptor,
+    )
+  ) {
     throw new Error("Unstable history collection.");
   }
   for (let index = 0; index < initialLength; index += 1) {
     if (
       !samePropertyDescriptor(
-        Object.getOwnPropertyDescriptor(value, index),
+        getOwnPropertyDescriptor(value, index),
         initialDescriptors[index],
       )
     ) {
@@ -339,8 +447,9 @@ function hasStableArrayLength(
   value: readonly unknown[],
   initialDescriptor: PropertyDescriptor,
   initialLength: number,
+  getOwnPropertyDescriptor: typeof Object.getOwnPropertyDescriptor,
 ): boolean {
-  const currentDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  const currentDescriptor = getOwnPropertyDescriptor(value, "length");
   const observedLength = value.length;
   return (
     samePropertyDescriptor(currentDescriptor, initialDescriptor) &&
@@ -409,17 +518,9 @@ function parseHistoryEntry(
 
   context.safeField = "result";
   const keys = Object.keys(value);
-  const allowedKeys = new Set([
-    "session",
-    "narrative",
-    "textVersion",
-    "savedAt",
-    "themeRef",
-    "deckRef",
-  ]);
   const keyCount = keys.length;
   for (let index = 0; index < keyCount; index += 1) {
-    if (!allowedKeys.has(keys[index]!)) {
+    if (!isAllowedHistoryEntryKey(keys[index]!)) {
       throw new Error("Invalid history entry key.");
     }
   }
@@ -438,6 +539,20 @@ function parseHistoryEntry(
   });
   assertEntryReadingResult(parsedEntry);
   return parsedEntry;
+}
+
+function isAllowedHistoryEntryKey(key: string): boolean {
+  switch (key) {
+    case "session":
+    case "narrative":
+    case "textVersion":
+    case "savedAt":
+    case "themeRef":
+    case "deckRef":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function assertEntryReadingResult(entry: LocalHistoryEntry): void {
