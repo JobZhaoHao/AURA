@@ -18,6 +18,8 @@ export type {
 export { SPREAD_DEFINITIONS } from "./spreads.js";
 export type { SpreadDefinition } from "./spreads.js";
 export { CONTENT_VERSION, RULES_VERSION, TEXT_VERSION } from "./versions.js";
+export { CURRENT_READING_CONTENT_BUNDLE } from "./reading-content-bundle.js";
+export type { ReadingContentBundle } from "./reading-content-bundle.js";
 export { DEFAULT_THEME } from "./manifests/default-theme.js";
 export { MINIMAL_ALT_THEME } from "./manifests/minimal-alt-theme.js";
 export { NEUTRAL_DECK } from "./manifests/neutral-deck.js";
