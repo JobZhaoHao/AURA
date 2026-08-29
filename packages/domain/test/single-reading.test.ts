@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { DomainError } from "../src/errors.js";
 import {
   assertSingleCardReadingResult,
   createSingleReading,

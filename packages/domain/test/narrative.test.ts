@@ -1,7 +1,6 @@
 import { CURRENT_READING_CONTENT_BUNDLE } from "@aura/content";
 import { describe, expect, it } from "vitest";
 import { type CardId, type QuestionCategory } from "@aura/contracts";
-import { DomainError } from "../src/errors.js";
 import { composeSingleNarrative } from "../src/narrative.js";
 import { getCurrentCardMeaningRecord } from "../src/reading-content.js";
 import type { SingleCardDraw } from "../src/single-card-draw.js";

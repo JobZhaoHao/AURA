@@ -7,6 +7,7 @@ import {
   type RandomDomain,
 } from "../src/deterministic-random.js";
 import { drawSingleCard } from "../src/single-card-draw.js";
+import { expectSafeDomainError } from "./helpers.js";
 
 const bundle = CURRENT_READING_CONTENT_BUNDLE;
 
@@ -84,6 +85,22 @@ describe("deterministic random", () => {
 });
 
 describe("drawSingleCard", () => {
+  it("redacts the seed and sampled index when the catalog is empty", () => {
+    const privateSeed = "private-seed-0001";
+    const emptyBundle = { ...bundle, cardCatalog: [] };
+
+    try {
+      drawSingleCard(privateSeed, true, emptyBundle);
+      throw new Error("Expected empty card content to fail.");
+    } catch (error) {
+      expectSafeDomainError(error, "UNKNOWN_CARD_CONTENT", "cardId", [
+        privateSeed,
+      ]);
+      expect(JSON.stringify(error)).not.toContain("sampledIndex");
+      expect(error).not.toHaveProperty("sampledIndex");
+    }
+  });
+
   it.each([
     ["aura-m1-fixed-seed", "major.death", "reversed"],
     ["fixture-seed-0001", "minor.wands.ten", "upright"],

@@ -21,19 +21,14 @@ export interface LocalHistoryPresentationRefs {
 }
 
 const MAX_LOCAL_HISTORY_ENTRIES = 10_000;
+const MANAGED_ARRAY_PROTOTYPE = Array.prototype;
+const MANAGED_ITERATOR_PROPERTY = Symbol.iterator;
+const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const defineProperty = Object.defineProperty;
+const deleteProperty = Reflect.deleteProperty;
 
 interface ArrayIntrinsicSnapshot {
-  readonly globalTarget: typeof globalThis;
-  readonly iteratorPropertyKey: symbol;
-  readonly arrayPrototype: object;
-  readonly globalArrayDescriptor: PropertyDescriptor;
   readonly iteratorDescriptor: PropertyDescriptor | undefined;
-  readonly objectConstructor: ObjectConstructor;
-  readonly getOwnPropertyDescriptorDescriptor: PropertyDescriptor;
-  readonly definePropertyDescriptor: PropertyDescriptor;
-  readonly getOwnPropertyDescriptor: typeof Object.getOwnPropertyDescriptor;
-  readonly defineProperty: typeof Object.defineProperty;
-  readonly deleteProperty: typeof Reflect.deleteProperty;
 }
 
 export function replayLocalHistoryEntry(
@@ -164,7 +159,7 @@ export function appendLocalHistoryEntry(
     intrinsicSnapshot = captureArrayIntrinsics();
     historySnapshot = snapshotDenseStableHistory(
       history,
-      intrinsicSnapshot.getOwnPropertyDescriptor,
+      getOwnPropertyDescriptor,
     );
     restoreArrayIntrinsics(intrinsicSnapshot);
   } catch {
@@ -249,92 +244,37 @@ function copyHistoryWithEntry(
 }
 
 function captureArrayIntrinsics(): ArrayIntrinsicSnapshot {
-  const globalTarget = globalThis;
-  const iteratorPropertyKey = Symbol.iterator;
-  const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-  const defineProperty = Object.defineProperty;
-  const deleteProperty = Reflect.deleteProperty;
-  const arrayConstructor = globalTarget.Array;
-  const arrayPrototype = arrayConstructor.prototype;
-  const globalArrayDescriptor = getOwnPropertyDescriptor(globalTarget, "Array");
-  const objectConstructor = Object;
-  const getOwnPropertyDescriptorDescriptor = getOwnPropertyDescriptor(
-    objectConstructor,
-    "getOwnPropertyDescriptor",
-  );
-  const definePropertyDescriptor = getOwnPropertyDescriptor(
-    objectConstructor,
-    "defineProperty",
-  );
-  if (
-    globalArrayDescriptor === undefined ||
-    getOwnPropertyDescriptorDescriptor === undefined ||
-    definePropertyDescriptor === undefined
-  ) {
-    throw new Error("Missing array intrinsic descriptor.");
-  }
-
   return {
-    globalTarget,
-    iteratorPropertyKey,
-    arrayPrototype,
-    globalArrayDescriptor,
     iteratorDescriptor: getOwnPropertyDescriptor(
-      arrayPrototype,
-      iteratorPropertyKey,
+      MANAGED_ARRAY_PROTOTYPE,
+      MANAGED_ITERATOR_PROPERTY,
     ),
-    objectConstructor,
-    getOwnPropertyDescriptorDescriptor,
-    definePropertyDescriptor,
-    getOwnPropertyDescriptor,
-    defineProperty,
-    deleteProperty,
   };
 }
 
 function restoreArrayIntrinsics(snapshot: ArrayIntrinsicSnapshot): void {
   restoreProperty(
-    snapshot,
-    snapshot.objectConstructor,
-    "getOwnPropertyDescriptor",
-    snapshot.getOwnPropertyDescriptorDescriptor,
-  );
-  restoreProperty(
-    snapshot,
-    snapshot.objectConstructor,
-    "defineProperty",
-    snapshot.definePropertyDescriptor,
-  );
-  restoreProperty(
-    snapshot,
-    snapshot.arrayPrototype,
-    snapshot.iteratorPropertyKey,
+    MANAGED_ARRAY_PROTOTYPE,
+    MANAGED_ITERATOR_PROPERTY,
     snapshot.iteratorDescriptor,
-  );
-  restoreProperty(
-    snapshot,
-    snapshot.globalTarget,
-    "Array",
-    snapshot.globalArrayDescriptor,
   );
 }
 
 function restoreProperty(
-  snapshot: ArrayIntrinsicSnapshot,
   target: object,
   property: PropertyKey,
   initialDescriptor: PropertyDescriptor | undefined,
 ): void {
-  const currentDescriptor = snapshot.getOwnPropertyDescriptor(target, property);
+  const currentDescriptor = getOwnPropertyDescriptor(target, property);
   if (samePropertyDescriptor(currentDescriptor, initialDescriptor)) return;
 
   if (initialDescriptor === undefined) {
-    if (!snapshot.deleteProperty(target, property)) {
+    if (!deleteProperty(target, property)) {
       throw new Error("Unable to restore intrinsic property.");
     }
     return;
   }
-  snapshot.defineProperty(target, property, initialDescriptor);
+  defineProperty(target, property, initialDescriptor);
 }
 
 function snapshotDenseStableHistory(

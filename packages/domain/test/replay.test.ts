@@ -143,6 +143,62 @@ describe("replayLocalHistoryEntry", () => {
     expect(JSON.stringify(replayed)).not.toContain(STORED_ENTRY.savedAt);
   });
 
+  it("returns parsed result references isolated from later caller mutation", () => {
+    const entry = {
+      ...STORED_ENTRY,
+      session: {
+        ...STORED_ENTRY.session,
+        draws: [{ ...STORED_ENTRY.session.draws[0] }],
+      },
+      narrative: { ...STORED_ENTRY.narrative },
+      themeRef: { ...STORED_ENTRY.themeRef! },
+      deckRef: { ...STORED_ENTRY.deckRef! },
+    } as LocalHistoryEntry;
+
+    const replayed = replayLocalHistoryEntry(entry);
+    const mutableEntry = entry as unknown as {
+      session: {
+        sessionId: string;
+        draws: Array<{ cardId: string; orientation: string }>;
+      };
+      narrative: { advice: string };
+      themeRef: { themeId: string };
+      deckRef: { deckId: string };
+    };
+    mutableEntry.session.sessionId = "PRIVATE_MUTATED_SESSION";
+    mutableEntry.session.draws[0]!.cardId = "major.private-mutated-card";
+    mutableEntry.session.draws[0]!.orientation = "reversed";
+    mutableEntry.narrative.advice = "PRIVATE_MUTATED_ADVICE";
+    mutableEntry.themeRef.themeId = "PRIVATE_MUTATED_THEME";
+    mutableEntry.deckRef.deckId = "PRIVATE_MUTATED_DECK";
+
+    expect(replayed).toEqual(STORED_RESULT);
+    expect(replayed.session).not.toBe(entry.session);
+    expect(replayed.session.draws).not.toBe(entry.session.draws);
+    expect(replayed.session.draws[0]).not.toBe(entry.session.draws[0]);
+    expect(replayed.narrative).not.toBe(entry.narrative);
+  });
+
+  it("redacts a throwing descriptor trap during version presence checks", () => {
+    const trapSentinel = "PRIVATE_VERSION_DESCRIPTOR_TRAP";
+    const session = new Proxy(
+      { ...STORED_ENTRY.session },
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error(trapSentinel);
+        },
+      },
+    );
+    const entry = { ...STORED_ENTRY, session } as LocalHistoryEntry;
+
+    expectReplayError(
+      () => replayLocalHistoryEntry(entry),
+      "INVALID_HISTORY_ENTRY",
+      "result",
+      [...SENSITIVE_VALUES, trapSentinel],
+    );
+  });
+
   it.each(["rulesVersion", "contentVersion", "textVersion"] as const)(
     "refuses an old stored %s before narrative refinement",
     (property) => {
