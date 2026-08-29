@@ -572,18 +572,29 @@ describe("appendLocalHistoryEntry", () => {
     );
   });
 
-  it("restores captured array intrinsics after an indexed getter rebinds globals", () => {
+  it("restores captured array intrinsics after an indexed getter rebinds global lookup keys", () => {
     const safeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
     const safeDefineProperty = Object.defineProperty;
-    const originalArrayConstructor = globalThis.Array;
+    const safeDeleteProperty = Reflect.deleteProperty;
+    const originalGlobalTarget = globalThis;
+    const originalIteratorKey = Symbol.iterator;
+    const originalArrayConstructor = originalGlobalTarget.Array;
     const originalArrayPrototype = originalArrayConstructor.prototype;
     const originalGlobalArrayDescriptor = safeGetOwnPropertyDescriptor(
-      globalThis,
+      originalGlobalTarget,
       "Array",
+    )!;
+    const originalGlobalSymbolDescriptor = safeGetOwnPropertyDescriptor(
+      originalGlobalTarget,
+      "Symbol",
+    )!;
+    const originalGlobalThisDescriptor = safeGetOwnPropertyDescriptor(
+      originalGlobalTarget,
+      "globalThis",
     )!;
     const originalIteratorDescriptor = safeGetOwnPropertyDescriptor(
       originalArrayPrototype,
-      Symbol.iterator,
+      originalIteratorKey,
     )!;
     const originalGetOwnPropertyDescriptorDescriptor =
       safeGetOwnPropertyDescriptor(Object, "getOwnPropertyDescriptor")!;
@@ -594,6 +605,20 @@ describe("appendLocalHistoryEntry", () => {
     const originalIterator =
       originalIteratorDescriptor.value as () => Iterator<unknown>;
     const intrinsicSentinel = "PRIVATE_REBOUND_ARRAY_INTRINSIC";
+    const reboundIteratorKey = Symbol("PRIVATE_REBOUND_ITERATOR_KEY");
+    const originalReboundIteratorDescriptor = safeGetOwnPropertyDescriptor(
+      originalArrayPrototype,
+      reboundIteratorKey,
+    );
+    function ReplacementArray(): void {}
+    function ReplacementSymbol(): void {}
+    safeDefineProperty(ReplacementSymbol, "iterator", {
+      configurable: false,
+      enumerable: false,
+      value: reboundIteratorKey,
+      writable: false,
+    });
+    const replacementGlobalTarget = { Array: ReplacementArray };
     const first = saved();
     const incoming = saved(reading({ sessionId: "history-session-003" }));
     const history = [first];
@@ -602,20 +627,19 @@ describe("appendLocalHistoryEntry", () => {
       configurable: true,
       enumerable: true,
       get() {
-        safeDefineProperty(originalArrayPrototype, Symbol.iterator, {
+        safeDefineProperty(originalArrayPrototype, originalIteratorKey, {
           ...originalIteratorDescriptor,
           value(): Iterator<unknown> {
             iteratorCalls += 1;
             safeDefineProperty(
               originalArrayPrototype,
-              Symbol.iterator,
+              originalIteratorKey,
               originalIteratorDescriptor,
             );
             return originalIterator.call([]);
           },
         });
-        function ReplacementArray(): void {}
-        safeDefineProperty(globalThis, "Array", {
+        safeDefineProperty(originalGlobalTarget, "Array", {
           ...originalGlobalArrayDescriptor,
           value: ReplacementArray,
         });
@@ -631,19 +655,82 @@ describe("appendLocalHistoryEntry", () => {
             throw new Error(intrinsicSentinel);
           },
         });
+        safeDefineProperty(originalGlobalTarget, "Symbol", {
+          ...originalGlobalSymbolDescriptor,
+          value: ReplacementSymbol,
+        });
+        safeDefineProperty(originalGlobalTarget, "globalThis", {
+          ...originalGlobalThisDescriptor,
+          value: replacementGlobalTarget,
+        });
         return first;
       },
     });
 
     let appended: readonly LocalHistoryEntry[] | undefined;
+    let appendError: unknown;
+    let productionState:
+      | {
+          globalArrayDescriptor: PropertyDescriptor | undefined;
+          iteratorDescriptor: PropertyDescriptor | undefined;
+          reboundIteratorDescriptor: PropertyDescriptor | undefined;
+          getOwnPropertyDescriptorDescriptor: PropertyDescriptor | undefined;
+          definePropertyDescriptor: PropertyDescriptor | undefined;
+          globalSymbolDescriptor: PropertyDescriptor | undefined;
+          globalThisDescriptor: PropertyDescriptor | undefined;
+        }
+      | undefined;
     try {
-      appended = appendLocalHistoryEntry(history, incoming);
+      try {
+        appended = appendLocalHistoryEntry(history, incoming);
+      } catch (error) {
+        appendError = error;
+      }
+      productionState = {
+        globalArrayDescriptor: safeGetOwnPropertyDescriptor(
+          originalGlobalTarget,
+          "Array",
+        ),
+        iteratorDescriptor: safeGetOwnPropertyDescriptor(
+          originalArrayPrototype,
+          originalIteratorKey,
+        ),
+        reboundIteratorDescriptor: safeGetOwnPropertyDescriptor(
+          originalArrayPrototype,
+          reboundIteratorKey,
+        ),
+        getOwnPropertyDescriptorDescriptor: safeGetOwnPropertyDescriptor(
+          Object,
+          "getOwnPropertyDescriptor",
+        ),
+        definePropertyDescriptor: safeGetOwnPropertyDescriptor(
+          Object,
+          "defineProperty",
+        ),
+        globalSymbolDescriptor: safeGetOwnPropertyDescriptor(
+          originalGlobalTarget,
+          "Symbol",
+        ),
+        globalThisDescriptor: safeGetOwnPropertyDescriptor(
+          originalGlobalTarget,
+          "globalThis",
+        ),
+      };
     } finally {
       safeDefineProperty(
         originalArrayPrototype,
-        Symbol.iterator,
+        originalIteratorKey,
         originalIteratorDescriptor,
       );
+      if (originalReboundIteratorDescriptor === undefined) {
+        safeDeleteProperty(originalArrayPrototype, reboundIteratorKey);
+      } else {
+        safeDefineProperty(
+          originalArrayPrototype,
+          reboundIteratorKey,
+          originalReboundIteratorDescriptor,
+        );
+      }
       safeDefineProperty(
         Object,
         "getOwnPropertyDescriptor",
@@ -654,20 +741,46 @@ describe("appendLocalHistoryEntry", () => {
         "defineProperty",
         originalDefinePropertyDescriptor,
       );
-      safeDefineProperty(globalThis, "Array", originalGlobalArrayDescriptor);
+      safeDefineProperty(
+        originalGlobalTarget,
+        "Array",
+        originalGlobalArrayDescriptor,
+      );
+      safeDefineProperty(
+        originalGlobalTarget,
+        "Symbol",
+        originalGlobalSymbolDescriptor,
+      );
+      safeDefineProperty(
+        originalGlobalTarget,
+        "globalThis",
+        originalGlobalThisDescriptor,
+      );
     }
 
+    expect(appendError).toBeUndefined();
     expect(appended).toEqual([first, incoming]);
     expect(iteratorCalls).toBe(0);
-    expect(globalThis.Array).toBe(originalArrayConstructor);
-    expect(
-      safeGetOwnPropertyDescriptor(originalArrayPrototype, Symbol.iterator),
-    ).toEqual(originalIteratorDescriptor);
-    expect(
-      safeGetOwnPropertyDescriptor(Object, "getOwnPropertyDescriptor"),
-    ).toEqual(originalGetOwnPropertyDescriptorDescriptor);
-    expect(safeGetOwnPropertyDescriptor(Object, "defineProperty")).toEqual(
+    expect(productionState?.globalArrayDescriptor).toEqual(
+      originalGlobalArrayDescriptor,
+    );
+    expect(productionState?.iteratorDescriptor).toEqual(
+      originalIteratorDescriptor,
+    );
+    expect(productionState?.reboundIteratorDescriptor).toEqual(
+      originalReboundIteratorDescriptor,
+    );
+    expect(productionState?.getOwnPropertyDescriptorDescriptor).toEqual(
+      originalGetOwnPropertyDescriptorDescriptor,
+    );
+    expect(productionState?.definePropertyDescriptor).toEqual(
       originalDefinePropertyDescriptor,
+    );
+    expect(productionState?.globalSymbolDescriptor?.value).toBe(
+      ReplacementSymbol,
+    );
+    expect(productionState?.globalThisDescriptor?.value).toBe(
+      replacementGlobalTarget,
     );
   });
 

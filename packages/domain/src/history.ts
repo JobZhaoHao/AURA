@@ -23,6 +23,8 @@ export interface LocalHistoryPresentationRefs {
 const MAX_LOCAL_HISTORY_ENTRIES = 10_000;
 
 interface ArrayIntrinsicSnapshot {
+  readonly globalTarget: typeof globalThis;
+  readonly iteratorPropertyKey: symbol;
   readonly arrayPrototype: object;
   readonly globalArrayDescriptor: PropertyDescriptor;
   readonly iteratorDescriptor: PropertyDescriptor | undefined;
@@ -247,12 +249,14 @@ function copyHistoryWithEntry(
 }
 
 function captureArrayIntrinsics(): ArrayIntrinsicSnapshot {
+  const globalTarget = globalThis;
+  const iteratorPropertyKey = Symbol.iterator;
   const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
   const defineProperty = Object.defineProperty;
   const deleteProperty = Reflect.deleteProperty;
-  const arrayConstructor = globalThis.Array;
+  const arrayConstructor = globalTarget.Array;
   const arrayPrototype = arrayConstructor.prototype;
-  const globalArrayDescriptor = getOwnPropertyDescriptor(globalThis, "Array");
+  const globalArrayDescriptor = getOwnPropertyDescriptor(globalTarget, "Array");
   const objectConstructor = Object;
   const getOwnPropertyDescriptorDescriptor = getOwnPropertyDescriptor(
     objectConstructor,
@@ -271,11 +275,13 @@ function captureArrayIntrinsics(): ArrayIntrinsicSnapshot {
   }
 
   return {
+    globalTarget,
+    iteratorPropertyKey,
     arrayPrototype,
     globalArrayDescriptor,
     iteratorDescriptor: getOwnPropertyDescriptor(
       arrayPrototype,
-      Symbol.iterator,
+      iteratorPropertyKey,
     ),
     objectConstructor,
     getOwnPropertyDescriptorDescriptor,
@@ -302,12 +308,12 @@ function restoreArrayIntrinsics(snapshot: ArrayIntrinsicSnapshot): void {
   restoreProperty(
     snapshot,
     snapshot.arrayPrototype,
-    Symbol.iterator,
+    snapshot.iteratorPropertyKey,
     snapshot.iteratorDescriptor,
   );
   restoreProperty(
     snapshot,
-    globalThis,
+    snapshot.globalTarget,
     "Array",
     snapshot.globalArrayDescriptor,
   );
