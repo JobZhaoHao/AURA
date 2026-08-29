@@ -59,7 +59,18 @@ importers:
         specifier: 4.1.5
         version: 4.1.5
 
-  packages/domain: {}
+  packages/domain:
+    dependencies:
+      "@aura/content":
+        specifier: workspace:*
+        version: link:../content
+      "@aura/contracts":
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      "@aura/test-kits":
+        specifier: workspace:*
+        version: link:../test-kits
 
   packages/test-kits:
     dependencies:

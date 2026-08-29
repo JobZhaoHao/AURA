@@ -2,5 +2,17 @@
   "name": "@aura/domain",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts"
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@aura/contracts": "workspace:*",
+    "@aura/content": "workspace:*"
+  },
+  "devDependencies": {
+    "@aura/test-kits": "workspace:*"
+  }
 }
