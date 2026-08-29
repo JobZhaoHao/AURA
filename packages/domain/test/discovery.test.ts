@@ -147,6 +147,34 @@ describe("recordCardDiscovery", () => {
     );
   });
 
+  it("prioritizes invalid persisted state over an invalid incoming card ID", () => {
+    const invalidExistingTime = "PRIVATE_EXISTING_TIME_2026-99-99";
+    const invalidIncomingCardId = "PRIVATE_INCOMING_CARD_ID" as CardId;
+    const records = [
+      { cardId: CARD_ID, firstSeenAt: invalidExistingTime },
+    ] as unknown as readonly DiscoveryRecord[];
+
+    expectInvalidDiscoveryState(
+      () => recordCardDiscovery(records, invalidIncomingCardId, FIRST_SEEN_AT),
+      "discovery",
+      [CARD_ID, invalidExistingTime, invalidIncomingCardId, FIRST_SEEN_AT],
+    );
+  });
+
+  it("prioritizes invalid persisted state over an invalid incoming time", () => {
+    const invalidExistingTime = "PRIVATE_EXISTING_TIME_2026-99-99";
+    const invalidIncomingTime = "PRIVATE_INCOMING_TIME_2026-99-99";
+    const records = [
+      { cardId: CARD_ID, firstSeenAt: invalidExistingTime },
+    ] as unknown as readonly DiscoveryRecord[];
+
+    expectInvalidDiscoveryState(
+      () => recordCardDiscovery(records, CARD_ID, invalidIncomingTime),
+      "discovery",
+      [CARD_ID, invalidExistingTime, invalidIncomingTime],
+    );
+  });
+
   it("rejects existing schema-valid card IDs outside the current catalog", () => {
     const noncanonical = "major.not-in-catalog" as CardId;
     const records: readonly DiscoveryRecord[] = [
