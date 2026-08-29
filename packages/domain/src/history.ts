@@ -20,6 +20,8 @@ export interface LocalHistoryPresentationRefs {
   readonly deckRef?: DeckManifestRef;
 }
 
+const MAX_LOCAL_HISTORY_ENTRIES = 10_000;
+
 export function replayLocalHistoryEntry(
   entry: LocalHistoryEntry,
 ): SingleCardReadingResult {
@@ -198,20 +200,63 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
     throw new Error("Invalid history collection.");
   }
 
-  const initialLength = value.length;
-  const initialDescriptors: PropertyDescriptor[] = [];
-  for (let index = 0; index < initialLength; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
-    if (descriptor === undefined) {
-      throw new Error("Sparse history collection.");
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  if (
+    lengthDescriptor === undefined ||
+    lengthDescriptor.configurable !== false ||
+    lengthDescriptor.enumerable !== false ||
+    !Object.hasOwn(lengthDescriptor, "value") ||
+    typeof lengthDescriptor.value !== "number" ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > MAX_LOCAL_HISTORY_ENTRIES
+  ) {
+    throw new Error("Invalid history length descriptor.");
+  }
+
+  const initialLength = lengthDescriptor.value;
+  const observedLength = value.length;
+  if (
+    typeof observedLength !== "number" ||
+    !Number.isSafeInteger(observedLength) ||
+    observedLength < 0 ||
+    observedLength > MAX_LOCAL_HISTORY_ENTRIES ||
+    observedLength !== initialLength
+  ) {
+    throw new Error("Invalid history length.");
+  }
+
+  const ownKeys = Reflect.ownKeys(value);
+  const indexKeys = ownKeys.filter(isArrayIndexKey);
+  if (indexKeys.length !== initialLength) {
+    throw new Error("Invalid history index shape.");
+  }
+
+  const initialDescriptors: Array<PropertyDescriptor | undefined> = Array.from({
+    length: initialLength,
+  });
+  for (const key of indexKeys) {
+    const index = Number(key);
+    if (index >= initialLength) {
+      throw new Error("Invalid history index.");
     }
-    initialDescriptors.push(descriptor);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || initialDescriptors[index] !== undefined) {
+      throw new Error("Invalid history index descriptor.");
+    }
+    initialDescriptors[index] = descriptor;
+  }
+  if (
+    initialDescriptors.some((descriptor) => descriptor === undefined) ||
+    !hasStableArrayLength(value, lengthDescriptor, initialLength)
+  ) {
+    throw new Error("Sparse or unstable history collection.");
   }
 
   const snapshot: unknown[] = [];
   for (let index = 0; index < initialLength; index += 1) {
     if (
-      value.length !== initialLength ||
+      !hasStableArrayLength(value, lengthDescriptor, initialLength) ||
       !samePropertyDescriptor(
         Object.getOwnPropertyDescriptor(value, index),
         initialDescriptors[index],
@@ -223,7 +268,7 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
     snapshot.push(value[index]);
 
     if (
-      value.length !== initialLength ||
+      !hasStableArrayLength(value, lengthDescriptor, initialLength) ||
       !samePropertyDescriptor(
         Object.getOwnPropertyDescriptor(value, index),
         initialDescriptors[index],
@@ -233,7 +278,7 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
     }
   }
 
-  if (value.length !== initialLength) {
+  if (!hasStableArrayLength(value, lengthDescriptor, initialLength)) {
     throw new Error("Unstable history collection.");
   }
   for (let index = 0; index < initialLength; index += 1) {
@@ -248,6 +293,30 @@ function snapshotDenseStableHistory(value: unknown): readonly unknown[] {
   }
 
   return snapshot;
+}
+
+function isArrayIndexKey(key: PropertyKey): key is string {
+  if (typeof key !== "string") return false;
+  const index = Number(key);
+  return (
+    Number.isInteger(index) &&
+    index >= 0 &&
+    index < 4_294_967_295 &&
+    String(index) === key
+  );
+}
+
+function hasStableArrayLength(
+  value: readonly unknown[],
+  initialDescriptor: PropertyDescriptor,
+  initialLength: number,
+): boolean {
+  const currentDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  const observedLength = value.length;
+  return (
+    samePropertyDescriptor(currentDescriptor, initialDescriptor) &&
+    observedLength === initialLength
+  );
 }
 
 function samePropertyDescriptor(

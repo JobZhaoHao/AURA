@@ -572,6 +572,129 @@ describe("appendLocalHistoryEntry", () => {
     );
   });
 
+  it.each([
+    ["corrupt record", "corrupt"],
+    ["duplicate session", "duplicate"],
+  ] as const)(
+    "rejects a trapped short length that hides a %s",
+    (_label, hiddenKind) => {
+      const hiddenSentinel = "PRIVATE_LENGTH_HIDDEN_HISTORY";
+      const first = saved();
+      const hidden =
+        hiddenKind === "corrupt"
+          ? ({
+              ...saved(reading({ sessionId: "history-session-002" })),
+              savedAt: hiddenSentinel,
+            } as LocalHistoryEntry)
+          : saved(reading(), "2026-08-30T00:00:00.000Z");
+      const history = new Proxy([first, hidden], {
+        get(target, property, receiver) {
+          if (property === "length") return 1;
+          return Reflect.get(target, property, receiver);
+        },
+      });
+
+      expectHistoryError(
+        () =>
+          appendLocalHistoryEntry(
+            history,
+            saved(reading({ sessionId: "history-session-003" })),
+          ),
+        "INVALID_HISTORY_ENTRY",
+        "history",
+        [hiddenSentinel, SESSION_ID],
+      );
+    },
+  );
+
+  it("rejects a trapped zero length instead of silently deleting history", () => {
+    const hiddenSession = "PRIVATE_ZERO_LENGTH_SESSION";
+    const history = new Proxy([saved(reading({ sessionId: hiddenSession }))], {
+      get(target, property, receiver) {
+        if (property === "length") return 0;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    expectHistoryError(
+      () =>
+        appendLocalHistoryEntry(
+          history,
+          saved(reading({ sessionId: "history-session-003" })),
+        ),
+      "INVALID_HISTORY_ENTRY",
+      "history",
+      [hiddenSession],
+    );
+  });
+
+  it.each([
+    ["negative", -1],
+    ["non-integer", 1.5],
+    ["infinite", Number.POSITIVE_INFINITY],
+    ["oversized", Number.MAX_SAFE_INTEGER],
+  ] as const)(
+    "rejects a %s trapped length before indexed work",
+    (_label, trappedLength) => {
+      const trapSentinel = `PRIVATE_${_label.toUpperCase()}_LENGTH_TRAP`;
+      let indexedDescriptorReads = 0;
+      const history = new Proxy([] as LocalHistoryEntry[], {
+        get(target, property, receiver) {
+          if (property === "length") return trappedLength;
+          return Reflect.get(target, property, receiver);
+        },
+        getOwnPropertyDescriptor(target, property) {
+          if (property === "length") {
+            return Reflect.getOwnPropertyDescriptor(target, property);
+          }
+          indexedDescriptorReads += 1;
+          if (indexedDescriptorReads > 2) throw new Error(trapSentinel);
+          return {
+            configurable: true,
+            enumerable: true,
+            value: saved(),
+            writable: true,
+          };
+        },
+      });
+
+      expectHistoryError(
+        () =>
+          appendLocalHistoryEntry(
+            history,
+            saved(reading({ sessionId: "history-session-003" })),
+          ),
+        "INVALID_HISTORY_ENTRY",
+        "history",
+        [trapSentinel],
+      );
+      expect(indexedDescriptorReads).toBe(0);
+    },
+  );
+
+  it("rejects observable own-key and indexed-descriptor disagreement", () => {
+    const hiddenSession = "PRIVATE_OMITTED_OWN_KEY_SESSION";
+    const history = new Proxy(
+      [saved(), saved(reading({ sessionId: hiddenSession }))],
+      {
+        ownKeys(target) {
+          return Reflect.ownKeys(target).filter((key) => key !== "1");
+        },
+      },
+    );
+
+    expectHistoryError(
+      () =>
+        appendLocalHistoryEntry(
+          history,
+          saved(reading({ sessionId: "history-session-003" })),
+        ),
+      "INVALID_HISTORY_ENTRY",
+      "history",
+      [hiddenSession],
+    );
+  });
+
   it("snapshots a stateful incoming saved time before schema validation", () => {
     const sentinel = "PRIVATE_INCOMING_SECOND_SAVED_AT_READ";
     let savedAtReads = 0;
