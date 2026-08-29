@@ -138,15 +138,62 @@ for (const [label, source] of unsafeMathMemberEscapes) {
   });
 }
 
+const indirectSafeMathMemberUses = [
+  [
+    "direct function reflection",
+    'Math.abs.constructor("return Math")().random();',
+  ],
+  [
+    "extracted function reflection",
+    'const abs = Math.abs; abs.constructor("return Math")().random();',
+  ],
+  [
+    "constant reflection",
+    'Math.PI.constructor.constructor("return Math")().random();',
+  ],
+  [
+    "computed optional reflection",
+    'Math["abs"]?.constructor("return Math")().random();',
+  ],
+  ["function extraction", "const abs = Math.abs; abs(-1);"],
+  ["constant extraction", "const pi = Math.PI; Math.abs(pi * 2);"],
+  [
+    "function passing",
+    "function use(value) { return value(-1); } use(Math.abs);",
+  ],
+  [
+    "constant return",
+    "function circumference() { return Math.PI; } circumference();",
+  ],
+];
+
+for (const [label, source] of indirectSafeMathMemberUses) {
+  test(`domain ESLint override rejects Math ${label}`, async () => {
+    const [result] = await eslint.lintText(source, {
+      filePath: virtualDomainFile,
+    });
+
+    assert.ok(result);
+    assert.ok(
+      result.messages.some(
+        ({ ruleId, message }) =>
+          ruleId === "aura-domain/safe-math-member" &&
+          message.includes("used directly"),
+      ),
+      JSON.stringify(result.messages),
+    );
+  });
+}
+
 test("domain ESLint override allows safe Math properties", async () => {
   const source = [
     "Math.abs(-1);",
-    "const abs = Math.abs; abs(-1);",
     'Math["floor"](1.2);',
     "Math?.abs(-1);",
     'Math?.["floor"](1.2);',
-    "Math.abs(Math.PI);",
-    'Math.abs(Math["E"]);',
+    "Math.abs?.(-1);",
+    "Math.abs(Math.PI * 2);",
+    'Math.abs(Math["E"] * 2);',
   ].join("\n");
   const [result] = await eslint.lintText(source, {
     filePath: virtualDomainFile,

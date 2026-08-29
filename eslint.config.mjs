@@ -20,7 +20,7 @@ const restrictedDomainGlobals = [
   "Date",
 ];
 
-const safeMathMembers = new Set([
+const safeMathConstants = new Set([
   "E",
   "LN10",
   "LN2",
@@ -29,6 +29,9 @@ const safeMathMembers = new Set([
   "PI",
   "SQRT1_2",
   "SQRT2",
+]);
+
+const safeMathFunctions = new Set([
   "abs",
   "acos",
   "acosh",
@@ -65,6 +68,36 @@ const safeMathMembers = new Set([
   "trunc",
 ]);
 
+const numericMathConstantOperators = new Set(["-", "*", "/", "%", "**"]);
+
+function directExpressionUsage(node) {
+  let expression = node;
+  while (expression.parent?.type === "ChainExpression") {
+    expression = expression.parent;
+  }
+  return { expression, parent: expression.parent };
+}
+
+function isDirectMathFunctionCall(node) {
+  const { expression, parent } = directExpressionUsage(node);
+  return parent?.type === "CallExpression" && parent.callee === expression;
+}
+
+function isDirectMathConstantOperation(node) {
+  const { expression, parent } = directExpressionUsage(node);
+  if (parent?.type === "UnaryExpression") {
+    return (
+      parent.argument === expression &&
+      (parent.operator === "+" || parent.operator === "-")
+    );
+  }
+  return (
+    parent?.type === "BinaryExpression" &&
+    numericMathConstantOperators.has(parent.operator) &&
+    (parent.left === expression || parent.right === expression)
+  );
+}
+
 const domainCapabilityPlugin = {
   meta: {
     name: "aura-domain-capabilities",
@@ -77,6 +110,10 @@ const domainCapabilityPlugin = {
         messages: {
           unsafeMember:
             "Domain code may access only safe numeric Math members; '{{member}}' is not allowed.",
+          unsafeFunctionUse:
+            "Safe Math function '{{member}}' must be used directly as a call callee; extraction and reflection are not allowed.",
+          unsafeConstantUse:
+            "Safe Math constant '{{member}}' must be used directly in a numeric operation; extraction and reflection are not allowed.",
         },
       },
       create(context) {
@@ -98,8 +135,26 @@ const domainCapabilityPlugin = {
                 ? node.property.name
                 : undefined;
 
-            if (memberName !== undefined && safeMathMembers.has(memberName)) {
-              return;
+            if (memberName !== undefined) {
+              if (safeMathFunctions.has(memberName)) {
+                if (isDirectMathFunctionCall(node)) return;
+                context.report({
+                  node,
+                  messageId: "unsafeFunctionUse",
+                  data: { member: memberName },
+                });
+                return;
+              }
+
+              if (safeMathConstants.has(memberName)) {
+                if (isDirectMathConstantOperation(node)) return;
+                context.report({
+                  node,
+                  messageId: "unsafeConstantUse",
+                  data: { member: memberName },
+                });
+                return;
+              }
             }
 
             context.report({
