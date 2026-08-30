@@ -47,7 +47,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/contracts
 
-  packages/content: {}
+  packages/content:
+    dependencies:
+      "@aura/contracts":
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/contracts:
     dependencies:
@@ -57,7 +61,14 @@ importers:
 
   packages/domain: {}
 
-  packages/test-kits: {}
+  packages/test-kits:
+    dependencies:
+      "@aura/content":
+        specifier: workspace:*
+        version: link:../content
+      "@aura/contracts":
+        specifier: workspace:*
+        version: link:../contracts
 
 packages:
   "@ampproject/remapping@2.3.0":

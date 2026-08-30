@@ -11,9 +11,9 @@
     "check:boundaries": "node tools/quality/check-boundaries.mjs packages/domain/src apps/game-client/assets/scripts",
     "check:secrets": "node tools/quality/check-secrets.mjs .",
     "test:node": "node --test tools/quality/tests/*.test.mjs",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p packages/content/tsconfig.type-tests.json",
     "test": "vitest run",
-    "quality": "prettier --check . && eslint . && node tools/quality/check-boundaries.mjs packages/domain/src apps/game-client/assets/scripts && node tools/quality/check-secrets.mjs . && tsc -b && node --test tools/quality/tests/*.test.mjs && vitest run"
+    "quality": "prettier --check . && eslint . && node tools/quality/check-boundaries.mjs packages/domain/src apps/game-client/assets/scripts && node tools/quality/check-secrets.mjs . && pnpm typecheck && node --test tools/quality/tests/*.test.mjs && vitest run"
   },
   "devDependencies": {
     "@eslint/js": "9.33.0",
