@@ -16,6 +16,7 @@ describe("shared deterministic fixtures", () => {
       sessionId: "fixture-session-001",
       questionCategory: "general",
       safetyDisposition: "standard",
+      reversalsEnabled: true,
       createdAt: "2026-08-28T00:00:00.000Z",
     });
     expect(FIXED_DAILY_INPUT).toEqual({
@@ -34,9 +35,10 @@ describe("shared deterministic fixtures", () => {
   });
 
   it("can seed a valid single-card session without duplicating schemas", () => {
-    const { seed, ...sessionInput } = FIXED_READING_INPUT;
+    const { seed, reversalsEnabled, ...sessionInput } = FIXED_READING_INPUT;
 
     expect(seed).toBe("aura-m1-fixed-seed");
+    expect(reversalsEnabled).toBe(true);
     expect(
       ReadingSessionSchema.safeParse({
         ...sessionInput,
